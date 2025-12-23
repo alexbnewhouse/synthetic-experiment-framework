@@ -345,7 +345,7 @@ This is a research framework under active development. Contributions welcome:
 If you use this framework in your research, please cite:
 
 ```
-Newhouse, A. (2024). Synthetic Experiment Framework: A Python toolkit for
+Newhouse, A. (2025). Synthetic Experiment Framework: A Python toolkit for
 social science research on LLM conversations.
 https://github.com/alexnewhouse/synthetic-experiment-framework
 ```
