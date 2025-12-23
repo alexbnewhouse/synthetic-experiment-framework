@@ -364,6 +364,52 @@ shift = calculate_opinion_shift(conversation_logger)
 print(f"Opinion shift: {shift['polarization_shift']}")
 ```
 
+### Pre/Post Survey Measurement
+
+For rigorous measurement of treatment effects, use the survey system to measure polarization changes in LLM "advisors" before and after conversations.
+
+```python
+from synthetic_experiments.analysis.survey import (
+    PolarizationSurvey,
+    SurveyAdministrator,
+    calculate_polarization_delta
+)
+from synthetic_experiments.providers.ollama import OllamaProvider
+from synthetic_experiments.agents import Persona
+
+# Load advisor persona
+advisor = Persona.from_yaml("personas/neutral_advisor.yaml")
+
+# Create survey administrator with a fixed seed for reproducibility
+admin = SurveyAdministrator(
+    provider_class=OllamaProvider,
+    provider_kwargs={"model_name": "llama3.2"},
+    persona=advisor,
+    seed=42  # Same seed ensures reproducible LLM initialization
+)
+
+# Administer PRE-survey (creates fresh LLM instance)
+pre_results = admin.administer_survey(survey_type="pre")
+print(f"Pre-survey scores: aff={pre_results.affective_score:.3f}, ideo={pre_results.ideological_score:.3f}")
+
+# ... run your conversation experiment here ...
+
+# Administer POST-survey (creates fresh LLM instance, same seed)
+post_results = admin.administer_survey(survey_type="post")
+
+# Calculate treatment effect
+delta = calculate_polarization_delta(pre_results, post_results)
+print(f"Treatment effect: {delta.overall_delta:+.3f}")
+```
+
+**Key features:**
+- **Context isolation**: Each survey creates a fresh LLM instance (no memory leakage)
+- **Reproducibility**: Same seed ensures identical LLM initialization
+- **Validated instruments**: 12 questions measuring affective and ideological polarization
+- **Customizable**: Add custom questions or use subsets of the default survey
+
+See the [Political Polarization Tutorial](political_polarization_tutorial.md#step-9-measuring-polarization-with-prepost-surveys) for detailed usage.
+
 ### Custom Metrics
 
 ```python
@@ -468,7 +514,7 @@ storage.export_turns_csv("analysis/turns.csv")
 
 ## Testing
 
-The framework includes a comprehensive test suite with 230+ tests covering all modules.
+The framework includes a comprehensive test suite with 260+ tests covering all modules.
 
 ### Running Tests
 

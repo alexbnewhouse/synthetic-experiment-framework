@@ -40,6 +40,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 6. **Analysis** (`synthetic_experiments/analysis/`)
    - `metrics.py`: Basic conversation metrics (length, turns, tokens)
    - `political.py`: Political language detection, polarization metrics, opinion shift
+   - `survey.py`: Pre/post survey system for measuring polarization treatment effects
    - `MetricCalculator`: Extensible framework for custom metrics
 
 ## Development Commands
@@ -202,6 +203,39 @@ def my_custom_metric(turn):
 calculator.register_metric("my_metric", my_custom_metric)
 ```
 
+### Using the Survey System for Treatment Effects
+The survey system measures polarization changes in LLM "advisors" before and after conversations:
+
+```python
+from synthetic_experiments.analysis.survey import (
+    SurveyAdministrator,
+    calculate_polarization_delta
+)
+from synthetic_experiments.providers.ollama import OllamaProvider
+from synthetic_experiments.agents import Persona
+
+# Create survey administrator with fixed seed for reproducibility
+admin = SurveyAdministrator(
+    provider_class=OllamaProvider,
+    provider_kwargs={"model_name": "llama3.2"},
+    persona=Persona.from_yaml("advisor.yaml"),
+    seed=42  # Same seed ensures reproducible LLM initialization
+)
+
+# Pre-survey (fresh LLM instance, no context leakage)
+pre_results = admin.administer_survey(survey_type="pre")
+
+# ... run conversation experiment with SEPARATE agent ...
+
+# Post-survey (fresh LLM instance, same seed)
+post_results = admin.administer_survey(survey_type="post")
+
+# Calculate treatment effect
+delta = calculate_polarization_delta(pre_results, post_results)
+```
+
+Key design: Each survey creates a fresh LLM instance to prevent context leakage between pre-survey, conversation, and post-survey. The same seed ensures identical LLM initialization.
+
 ### Creating a New Persona
 Option 1 - YAML file:
 ```yaml
@@ -299,7 +333,8 @@ tests/
 
 ## Implemented Features
 
-- ✅ Unit tests (pytest) - 230+ tests with ~79% coverage
+- ✅ Unit tests (pytest) - 260+ tests with ~79% coverage
+- ✅ Pre/post survey system for measuring polarization treatment effects
 
 ## Critical Files to Understand
 
@@ -307,4 +342,5 @@ tests/
 2. `synthetic_experiments/agents/agent.py` - Core agent logic
 3. `synthetic_experiments/experiments/experiment.py` - Orchestration
 4. `synthetic_experiments/experiments/config.py` - YAML configuration system
-5. `examples/political_polarization/run_experiment.py` - Complete usage example
+5. `synthetic_experiments/analysis/survey.py` - Pre/post survey measurement system
+6. `examples/political_polarization/run_experiment.py` - Complete usage example

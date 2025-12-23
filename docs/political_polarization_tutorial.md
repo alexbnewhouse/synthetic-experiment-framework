@@ -370,6 +370,176 @@ def count_facts_vs_opinions(turn):
 calculator.register_metric("fact_opinion", count_facts_vs_opinions)
 ```
 
+## Step 9: Measuring Polarization with Pre/Post Surveys
+
+For rigorous measurement of how conversations affect LLM "advisor" attitudes, the framework provides a survey system that measures **affective polarization** (feelings toward political groups) and **ideological polarization** (strength of policy positions).
+
+### Key Design Principle: Context Isolation
+
+A critical methodological challenge is ensuring that pre-survey responses don't "leak" into the conversation or post-survey. The `SurveyAdministrator` solves this by:
+
+1. Creating a **fresh LLM instance** for each survey administration
+2. Using the **same random seed** to ensure identical initialization
+3. Each survey question gets its own isolated context window
+
+```python
+from synthetic_experiments.analysis.survey import (
+    PolarizationSurvey,
+    SurveyAdministrator,
+    calculate_polarization_delta
+)
+from synthetic_experiments.providers.ollama import OllamaProvider
+from synthetic_experiments.agents import Persona
+
+# Load advisor persona
+advisor = Persona.from_yaml("examples/political_polarization/personas/neutral_advisor.yaml")
+
+# Create survey administrator with a fixed seed
+admin = SurveyAdministrator(
+    provider_class=OllamaProvider,
+    provider_kwargs={"model_name": "llama3.2"},
+    persona=advisor,
+    seed=42  # Same seed ensures reproducible LLM initialization
+)
+
+# Administer PRE-survey (fresh LLM instance)
+pre_results = admin.administer_survey(survey_type="pre")
+print(f"Pre-survey affective score: {pre_results.affective_score:.3f}")
+print(f"Pre-survey ideological score: {pre_results.ideological_score:.3f}")
+
+# ========================================
+# CONDUCT CONVERSATION EXPERIMENT HERE
+# (Use a SEPARATE agent with the same seed)
+# ========================================
+
+# Administer POST-survey (fresh LLM instance, same seed)
+post_results = admin.administer_survey(survey_type="post")
+print(f"Post-survey affective score: {post_results.affective_score:.3f}")
+
+# Calculate treatment effect
+delta = calculate_polarization_delta(pre_results, post_results)
+print(f"\n=== Treatment Effects ===")
+print(f"Affective polarization change: {delta.affective_delta:+.3f}")
+print(f"Ideological polarization change: {delta.ideological_delta:+.3f}")
+print(f"Overall change: {delta.overall_delta:+.3f}")
+```
+
+### Survey Questions
+
+The `PolarizationSurvey` includes validated question instruments:
+
+**Affective Polarization Questions (6 total):**
+- Feeling thermometers toward liberals/conservatives
+- Trust attributions toward political groups
+- Social distance measures (comfort with outgroup friends)
+
+**Ideological Polarization Questions (6 total):**
+- Policy positions on climate, healthcare, immigration, taxes, guns
+- Certainty about political views
+
+### Experimental Protocol
+
+For a rigorous study with treatment (user political slant):
+
+```python
+from synthetic_experiments.analysis.survey import create_survey_experiment_protocol
+
+# Create protocol
+protocol = create_survey_experiment_protocol(
+    provider_class=OllamaProvider,
+    provider_kwargs={"model_name": "llama3.2"},
+    advisor_persona=advisor,
+    seed=42
+)
+
+# The protocol documents the steps:
+for step, desc in protocol["protocol"].items():
+    print(f"{step}: {desc}")
+```
+
+### Running a Full Pre/Post Study
+
+```python
+from synthetic_experiments.experiments import Experiment
+import json
+
+results = []
+
+# For each condition (e.g., liberal user, conservative user, moderate user)
+for user_persona_path in ["liberal_user.yaml", "conservative_user.yaml", "moderate_user.yaml"]:
+    # Load personas
+    user = Persona.from_yaml(f"personas/{user_persona_path}")
+    advisor = Persona.from_yaml("personas/neutral_advisor.yaml")
+    
+    # Create fresh administrator for this condition
+    admin = SurveyAdministrator(
+        provider_class=OllamaProvider,
+        provider_kwargs={"model_name": "llama3.2"},
+        persona=advisor,
+        seed=42
+    )
+    
+    # 1. Pre-survey
+    pre_results = admin.administer_survey("pre")
+    
+    # 2. Run conversation (use a separate agent with same seed)
+    # ... experiment code here ...
+    
+    # 3. Post-survey  
+    post_results = admin.administer_survey("post")
+    
+    # 4. Calculate delta
+    delta = calculate_polarization_delta(pre_results, post_results)
+    
+    results.append({
+        "condition": user_persona_path,
+        "pre_affective": pre_results.affective_score,
+        "post_affective": post_results.affective_score,
+        "delta_affective": delta.affective_delta,
+        "delta_ideological": delta.ideological_delta,
+        "delta_overall": delta.overall_delta
+    })
+
+# Export results
+import pandas as pd
+df = pd.DataFrame(results)
+df.to_csv("survey_results.csv", index=False)
+print(df)
+```
+
+### Customizing Survey Questions
+
+You can add custom questions or use only a subset:
+
+```python
+from synthetic_experiments.analysis.survey import SurveyQuestion, PolarizationType
+
+# Custom question
+custom_q = SurveyQuestion(
+    id="custom_media_trust",
+    text="How much do you trust mainstream media to report accurately? (1=Not at all, 7=Completely)",
+    scale_min=1,
+    scale_max=7,
+    polarization_type=PolarizationType.AFFECTIVE
+)
+
+# Create survey with custom questions
+survey = PolarizationSurvey(
+    include_affective=True,
+    include_ideological=False,  # Skip ideological questions
+    custom_questions=[custom_q]
+)
+
+# Use in administrator
+admin = SurveyAdministrator(
+    provider_class=OllamaProvider,
+    provider_kwargs={"model_name": "llama3.2"},
+    persona=advisor,
+    seed=42,
+    survey=survey
+)
+```
+
 ## Publishing Your Results
 
 When publishing research using this framework:
@@ -377,8 +547,9 @@ When publishing research using this framework:
 1. **Save all configurations**: Include YAML files in supplementary materials
 2. **Report model details**: Document exact model versions used
 3. **Share aggregated data**: Export CSV files for transparency
-4. **Document random seeds**: For reproducibility
-5. **Cite the framework**: Reference this package in methods section
+4. **Document random seeds**: For reproducibility (critical for surveys!)
+5. **Report survey valid response rates**: Survey results include `valid_response_rate`
+6. **Cite the framework**: Reference this package in methods section
 
 ## Conclusion
 
@@ -386,6 +557,7 @@ This framework enables rigorous social science research on LLM conversations. Th
 
 - Design factorial experiments
 - Collect comprehensive data
+- **Measure treatment effects with pre/post surveys**
 - Analyze both quantitative metrics and qualitative patterns
 - Export results for statistical analysis
 - Scale from pilot studies to full experiments

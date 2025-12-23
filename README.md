@@ -143,7 +143,45 @@ polarization = analyze_conversation_polarization(conversation)
 shift = calculate_opinion_shift(conversation)
 ```
 
-### 5. Experimental Design Support
+### 5. Pre/Post Survey System for Treatment Effects
+
+Measure polarization changes in LLM "advisors" with context-isolated surveys:
+
+```python
+from synthetic_experiments.analysis.survey import (
+    SurveyAdministrator,
+    calculate_polarization_delta
+)
+from synthetic_experiments.providers import OllamaProvider
+from synthetic_experiments.agents import Persona
+
+# Create survey administrator with fixed seed for reproducibility
+admin = SurveyAdministrator(
+    provider_class=OllamaProvider,
+    provider_kwargs={"model_name": "llama3.2"},
+    persona=Persona.from_yaml("advisor.yaml"),
+    seed=42
+)
+
+# Pre-survey (fresh LLM instance)
+pre_results = admin.administer_survey(survey_type="pre")
+
+# ... run conversation experiment ...
+
+# Post-survey (fresh LLM instance, same seed)
+post_results = admin.administer_survey(survey_type="post")
+
+# Calculate treatment effect
+delta = calculate_polarization_delta(pre_results, post_results)
+print(f"Affective polarization change: {delta.affective_delta:+.3f}")
+```
+
+**Key features:**
+- Context isolation (each survey creates fresh LLM instance)
+- Seed-based reproducibility
+- Validated affective & ideological polarization instruments
+
+### 6. Experimental Design Support
 
 Run factorial designs, multiple replicates, and batch experiments:
 
@@ -162,7 +200,7 @@ results = experiment.run()
 
 ## Testing
 
-The framework includes a comprehensive test suite with 230+ tests covering all modules:
+The framework includes a comprehensive test suite with 260+ tests covering all modules:
 
 ```bash
 # Run all tests
