@@ -52,8 +52,21 @@ pip install -r requirements.txt
 
 ### Running Tests
 ```bash
-# Unit tests (when implemented)
+# Run all tests
 pytest tests/
+
+# Run with coverage report
+pytest tests/ --cov=synthetic_experiments --cov-report=term-missing
+
+# Run specific test modules
+pytest tests/test_providers/      # Provider tests
+pytest tests/test_agents/         # Agent and persona tests
+pytest tests/test_experiments/    # Experiment orchestration tests
+pytest tests/test_analysis/       # Metrics and analysis tests
+pytest tests/test_data/           # Data logging/storage tests
+
+# Skip integration tests (require Ollama running)
+pytest tests/ -m "not integration"
 
 # Run example experiment
 cd examples/political_polarization
@@ -230,16 +243,33 @@ persona = Persona(
 ## Testing and Validation
 
 ### Before Committing Changes
-1. Ensure imports work: `python -c "import synthetic_experiments"`
-2. Run example: `cd examples/political_polarization && python run_experiment.py`
-3. Check docstrings are clear and include examples
-4. Verify YAML configs still load: `load_experiment_config("config.yaml")`
+1. Run the test suite: `pytest tests/`
+2. Check coverage: `pytest tests/ --cov=synthetic_experiments`
+3. Ensure imports work: `python -c "import synthetic_experiments"`
+4. Run example: `cd examples/political_polarization && python run_experiment.py`
+5. Check docstrings are clear and include examples
+6. Verify YAML configs still load: `load_experiment_config("config.yaml")`
 
 ### When Adding Features
+- Add corresponding tests in `tests/` directory
 - Add docstrings with examples
 - Update relevant documentation in `docs/`
 - Consider if feature needs example in `examples/`
 - Think about social scientist user perspective
+
+### Test Structure
+```
+tests/
+├── conftest.py              # Shared fixtures, MockLLMProvider
+├── pytest.ini               # pytest configuration
+├── utils/                   # Test utilities and helpers
+├── test_providers/          # Tests for Ollama, Claude, OpenAI providers
+├── test_agents/             # Tests for Persona, PersonaFactory, ConversationAgent
+├── test_experiments/        # Tests for Experiment, config loading
+├── test_data/               # Tests for ConversationLogger, ExperimentStorage
+├── test_analysis/           # Tests for metrics, political analysis
+└── test_integration.py      # End-to-end integration tests
+```
 
 ## Dependencies
 
@@ -261,12 +291,15 @@ persona = Persona(
 
 - CLI tool (`synthetic-exp` command)
 - API reference documentation
-- Unit tests (pytest)
 - Streaming conversation support
 - Real-time metrics dashboard
 - More sophisticated stopping conditions
 - Multi-agent (>2 participants) support
 - Conversation continuation/interruption
+
+## Implemented Features
+
+- ✅ Unit tests (pytest) - 230+ tests with ~79% coverage
 
 ## Critical Files to Understand
 

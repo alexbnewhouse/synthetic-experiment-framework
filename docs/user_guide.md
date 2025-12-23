@@ -466,6 +466,77 @@ storage.export_summary_csv("analysis/summary.csv")
 storage.export_turns_csv("analysis/turns.csv")
 ```
 
+## Testing
+
+The framework includes a comprehensive test suite with 230+ tests covering all modules.
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest tests/
+
+# Run with coverage report
+pytest tests/ --cov=synthetic_experiments --cov-report=term-missing
+
+# Run specific test modules
+pytest tests/test_providers/      # Provider tests
+pytest tests/test_agents/         # Agent and persona tests
+pytest tests/test_experiments/    # Experiment orchestration tests
+pytest tests/test_analysis/       # Metrics and analysis tests
+pytest tests/test_data/           # Data logging/storage tests
+pytest tests/test_integration.py  # End-to-end tests
+
+# Skip integration tests (require Ollama running)
+pytest tests/ -m "not integration"
+```
+
+### Test Structure
+
+```
+tests/
+├── conftest.py              # Shared fixtures and MockLLMProvider
+├── pytest.ini               # pytest configuration
+├── utils/                   # Test utilities and helpers
+├── test_providers/          # Provider unit tests (Ollama, Claude, OpenAI)
+├── test_agents/             # Agent and persona tests
+├── test_experiments/        # Experiment orchestration tests
+├── test_data/               # Data logging and storage tests
+├── test_analysis/           # Metrics and political analysis tests
+└── test_integration.py      # End-to-end integration tests
+```
+
+### Using MockLLMProvider in Your Tests
+
+The test suite includes a `MockLLMProvider` that you can use for testing without making actual API calls:
+
+```python
+from tests.conftest import MockLLMProvider
+
+# Create a mock provider with custom responses
+mock_provider = MockLLMProvider(responses=["Response 1", "Response 2"])
+
+# Use in your tests
+agent = ConversationAgent(
+    provider=mock_provider,
+    persona=your_persona,
+    role="assistant"
+)
+
+response = agent.respond("Hello")
+# Returns "Response 1" without any API calls
+```
+
+### Writing New Tests
+
+When adding new features, follow these conventions:
+
+1. Create tests in the appropriate `tests/test_*/` directory
+2. Use fixtures from `conftest.py` when possible
+3. Mock external API calls using `MockLLMProvider` or `unittest.mock`
+4. Add integration tests for end-to-end workflows
+5. Aim for good coverage of edge cases
+
 ## Next Steps
 
 - Explore the [API Reference](api_reference.md) for detailed class/method documentation

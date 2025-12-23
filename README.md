@@ -160,6 +160,30 @@ experiment = load_experiment_config("config.yaml")
 results = experiment.run()
 ```
 
+## Testing
+
+The framework includes a comprehensive test suite with 230+ tests covering all modules:
+
+```bash
+# Run all tests
+pytest tests/
+
+# Run with coverage report
+pytest tests/ --cov=synthetic_experiments --cov-report=term-missing
+
+# Run specific test modules
+pytest tests/test_providers/      # Provider tests
+pytest tests/test_agents/         # Agent and persona tests
+pytest tests/test_experiments/    # Experiment orchestration tests
+pytest tests/test_analysis/       # Metrics and analysis tests
+pytest tests/test_data/           # Data logging/storage tests
+
+# Skip integration tests (that require external services)
+pytest tests/ -m "not integration"
+```
+
+Test coverage: ~79% across all modules.
+
 ## Project Structure
 
 ```
@@ -175,6 +199,15 @@ examples/
 │   ├── personas/            # Pre-built political personas
 │   ├── config.yaml          # Experiment configuration
 │   └── run_experiment.py    # Run script
+
+tests/
+├── conftest.py              # Shared fixtures and MockLLMProvider
+├── test_providers/          # Provider unit tests
+├── test_agents/             # Agent and persona tests
+├── test_experiments/        # Experiment tests
+├── test_data/               # Data logging/storage tests
+├── test_analysis/           # Metrics and analysis tests
+└── test_integration.py      # End-to-end integration tests
 
 docs/
 ├── getting_started.md                  # Installation and first steps
@@ -253,6 +286,10 @@ Core dependencies:
 - `pyyaml` - Configuration management
 - `pandas` - Data analysis
 - `pydantic` - Data validation
+
+Development dependencies:
+- `pytest` - Testing framework
+- `pytest-cov` - Coverage reporting
 
 See `requirements.txt` for complete list.
 

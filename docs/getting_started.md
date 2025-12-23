@@ -151,6 +151,25 @@ python run_experiment.py --replicates 5
 python run_experiment.py --full-design
 ```
 
+## Running Tests
+
+The framework includes a comprehensive test suite:
+
+```bash
+# Run all tests
+pytest tests/
+
+# Run with coverage report
+pytest tests/ --cov=synthetic_experiments
+
+# Run specific module tests
+pytest tests/test_providers/
+pytest tests/test_agents/
+
+# Skip integration tests (require Ollama)
+pytest tests/ -m "not integration"
+```
+
 ## Next Steps
 
 - Read the [User Guide](user_guide.md) for detailed explanations
