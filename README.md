@@ -1,1 +1,1 @@
-# synthetic-experiment-framework
+# Synthetic Experiment Framework
