@@ -145,7 +145,7 @@ shift = calculate_opinion_shift(conversation)
 
 ### 5. Pre/Post Survey System for Treatment Effects
 
-Measure polarization changes in LLM "advisors" with context-isolated surveys:
+Measure how conversations in context affect LLM "advisor" survey responses:
 
 ```python
 from synthetic_experiments.analysis.survey import (
@@ -153,33 +153,37 @@ from synthetic_experiments.analysis.survey import (
     calculate_polarization_delta
 )
 from synthetic_experiments.providers import OllamaProvider
-from synthetic_experiments.agents import Persona
+from synthetic_experiments.agents import Persona, ConversationAgent
 
-# Create survey administrator with fixed seed for reproducibility
+# Create survey administrator
 admin = SurveyAdministrator(
     provider_class=OllamaProvider,
     provider_kwargs={"model_name": "llama3.2"},
     persona=Persona.from_yaml("advisor.yaml"),
-    seed=42
+    seed=42,
+    survey="bail2018"  # Use Bail et al. (2018) PNAS survey
 )
 
-# Pre-survey (fresh LLM instance)
-pre_results = admin.administer_survey(survey_type="pre")
+# Pre-survey (fresh LLM - baseline)
+pre_results = admin.administer_pre_survey()
 
-# ... run conversation experiment ...
+# Run conversation experiment with advisor agent
+advisor_agent = ConversationAgent(provider=provider, persona=persona)
+# ... conversation runs here ...
 
-# Post-survey (fresh LLM instance, same seed)
-post_results = admin.administer_survey(survey_type="post")
+# Post-survey (SAME agent with conversation in context)
+post_results = admin.administer_post_survey(advisor_agent)
 
 # Calculate treatment effect
 delta = calculate_polarization_delta(pre_results, post_results)
-print(f"Affective polarization change: {delta.affective_delta:+.3f}")
+print(f"Ideological shift: {delta.ideological_delta:+.3f}")
 ```
 
 **Key features:**
-- Context isolation (each survey creates fresh LLM instance)
-- Seed-based reproducibility
-- Validated affective & ideological polarization instruments
+- Pre-survey: Fresh LLM (baseline measurement)
+- Post-survey: Includes conversation history in context window
+- Measures how compressed conversations affect LLM responses
+- Built-in surveys: `"default"` (affective + ideological) or `"bail2018"` (PNAS replication)
 
 ### 6. Experimental Design Support
 

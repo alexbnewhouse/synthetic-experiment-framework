@@ -204,37 +204,47 @@ calculator.register_metric("my_metric", my_custom_metric)
 ```
 
 ### Using the Survey System for Treatment Effects
-The survey system measures polarization changes in LLM "advisors" before and after conversations:
+The survey system measures how conversations (in context) affect LLM "advisor" survey responses:
 
 ```python
 from synthetic_experiments.analysis.survey import (
     SurveyAdministrator,
-    calculate_polarization_delta
+    BailEtAlSurvey,
+    calculate_polarization_delta,
+    list_available_surveys
 )
 from synthetic_experiments.providers.ollama import OllamaProvider
-from synthetic_experiments.agents import Persona
+from synthetic_experiments.agents import Persona, ConversationAgent
 
-# Create survey administrator with fixed seed for reproducibility
+# Create survey administrator
+# Survey options: "default" (12 questions) or "bail2018" (10-item PNAS replication)
 admin = SurveyAdministrator(
     provider_class=OllamaProvider,
     provider_kwargs={"model_name": "llama3.2"},
     persona=Persona.from_yaml("advisor.yaml"),
-    seed=42  # Same seed ensures reproducible LLM initialization
+    seed=42,
+    survey="bail2018"  # Bail et al. (2018) PNAS 10-item policy scale
 )
 
-# Pre-survey (fresh LLM instance, no context leakage)
-pre_results = admin.administer_survey(survey_type="pre")
+# Pre-survey (fresh LLM - baseline measurement)
+pre_results = admin.administer_pre_survey()
 
-# ... run conversation experiment with SEPARATE agent ...
+# Run conversation experiment
+advisor_agent = ConversationAgent(provider=..., persona=...)
+# ... conversation runs, building advisor_agent.conversation_history ...
 
-# Post-survey (fresh LLM instance, same seed)
-post_results = admin.administer_survey(survey_type="post")
+# Post-survey (with conversation in context!)
+post_results = admin.administer_post_survey(advisor_agent)
 
 # Calculate treatment effect
 delta = calculate_polarization_delta(pre_results, post_results)
 ```
 
-Key design: Each survey creates a fresh LLM instance to prevent context leakage between pre-survey, conversation, and post-survey. The same seed ensures identical LLM initialization.
+Key design: 
+- Pre-survey: Fresh LLM instance (baseline, no context)
+- Post-survey: Uses advisor agent WITH conversation history in context window
+- This measures how conversation context affects LLM responses
+- Two built-in surveys: "default" (affective + ideological) or "bail2018" (PNAS replication)
 
 ### Creating a New Persona
 Option 1 - YAML file:

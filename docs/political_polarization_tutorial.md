@@ -372,70 +372,88 @@ calculator.register_metric("fact_opinion", count_facts_vs_opinions)
 
 ## Step 9: Measuring Polarization with Pre/Post Surveys
 
-For rigorous measurement of how conversations affect LLM "advisor" attitudes, the framework provides a survey system that measures **affective polarization** (feelings toward political groups) and **ideological polarization** (strength of policy positions).
+For rigorous measurement of how conversations affect LLM "advisor" responses, the framework provides a survey system that measures how **conversation context** influences LLM outputs on political attitude questions.
 
-### Key Design Principle: Context Isolation
+### Key Design Principle: Context as Treatment
 
-A critical methodological challenge is ensuring that pre-survey responses don't "leak" into the conversation or post-survey. The `SurveyAdministrator` solves this by:
+The critical insight is that the **conversation compressed in the context window** is the treatment. The survey system measures this by:
 
-1. Creating a **fresh LLM instance** for each survey administration
-2. Using the **same random seed** to ensure identical initialization
-3. Each survey question gets its own isolated context window
+1. **Pre-survey**: Fresh LLM instance with no context (baseline measurement)
+2. **Post-survey**: Same agent with conversation history in context window
+3. **Treatment effect**: Change in responses due to conversation in context
+
+This design answers: "How does having a conversation (in context) affect LLM survey responses?"
 
 ```python
 from synthetic_experiments.analysis.survey import (
-    PolarizationSurvey,
     SurveyAdministrator,
+    BailEtAlSurvey,
     calculate_polarization_delta
 )
 from synthetic_experiments.providers.ollama import OllamaProvider
-from synthetic_experiments.agents import Persona
+from synthetic_experiments.agents import Persona, ConversationAgent
 
 # Load advisor persona
-advisor = Persona.from_yaml("examples/political_polarization/personas/neutral_advisor.yaml")
+advisor_persona = Persona.from_yaml("examples/political_polarization/personas/neutral_advisor.yaml")
 
-# Create survey administrator with a fixed seed
+# Create survey administrator
+# Use "bail2018" for Bail et al. (2018) PNAS replication, or "default" for custom survey
 admin = SurveyAdministrator(
     provider_class=OllamaProvider,
     provider_kwargs={"model_name": "llama3.2"},
-    persona=advisor,
-    seed=42  # Same seed ensures reproducible LLM initialization
+    persona=advisor_persona,
+    seed=42,
+    survey="bail2018"  # 10-item policy scale from Bail et al. (2018)
 )
 
-# Administer PRE-survey (fresh LLM instance)
-pre_results = admin.administer_survey(survey_type="pre")
-print(f"Pre-survey affective score: {pre_results.affective_score:.3f}")
+# Administer PRE-survey (fresh LLM - baseline)
+pre_results = admin.administer_pre_survey()
 print(f"Pre-survey ideological score: {pre_results.ideological_score:.3f}")
 
 # ========================================
-# CONDUCT CONVERSATION EXPERIMENT HERE
-# (Use a SEPARATE agent with the same seed)
+# CONDUCT CONVERSATION EXPERIMENT
+# Create advisor agent and run conversation
 # ========================================
+advisor_provider = OllamaProvider(model_name="llama3.2")
+advisor_agent = ConversationAgent(
+    provider=advisor_provider,
+    persona=advisor_persona,
+    role="assistant"
+)
+# ... run conversation with user agent here ...
+# advisor_agent now has conversation_history populated
 
-# Administer POST-survey (fresh LLM instance, same seed)
-post_results = admin.administer_survey(survey_type="post")
-print(f"Post-survey affective score: {post_results.affective_score:.3f}")
+# Administer POST-survey (with conversation in context!)
+post_results = admin.administer_post_survey(advisor_agent)
+print(f"Post-survey ideological score: {post_results.ideological_score:.3f}")
+print(f"Conversation turns in context: {post_results.metadata.get('conversation_turns_in_context', 0)}")
 
 # Calculate treatment effect
 delta = calculate_polarization_delta(pre_results, post_results)
 print(f"\n=== Treatment Effects ===")
-print(f"Affective polarization change: {delta.affective_delta:+.3f}")
 print(f"Ideological polarization change: {delta.ideological_delta:+.3f}")
 print(f"Overall change: {delta.overall_delta:+.3f}")
 ```
 
-### Survey Questions
+### Survey Options
 
-The `PolarizationSurvey` includes validated question instruments:
+The framework provides two built-in survey instruments:
 
-**Affective Polarization Questions (6 total):**
-- Feeling thermometers toward liberals/conservatives
-- Trust attributions toward political groups
-- Social distance measures (comfort with outgroup friends)
+**1. Default Survey (`survey="default"`)** - Custom polarization survey:
+- **Affective Polarization (6 questions):** Feeling thermometers, trust, social distance
+- **Ideological Polarization (6 questions):** Climate, healthcare, immigration, taxes, guns, certainty
 
-**Ideological Polarization Questions (6 total):**
-- Policy positions on climate, healthcare, immigration, taxes, guns
-- Certainty about political views
+**2. Bail et al. 2018 Survey (`survey="bail2018"`)** - PNAS replication:
+- **10-item policy scale** from Bail et al. (2018) "Exposure to opposing views on social media can increase political polarization"
+- Covers: government regulation, welfare, racial discrimination, immigration, corporate profits, homosexuality acceptance, military strength
+- Higher scores = more conservative positions (α=.91 in original study)
+- Use `BailEtAlSurvey.compute_conservatism_score()` for original scoring
+
+```python
+# List available surveys
+from synthetic_experiments.analysis.survey import list_available_surveys
+print(list_available_surveys())
+```
 
 ### Experimental Protocol
 
@@ -444,23 +462,32 @@ For a rigorous study with treatment (user political slant):
 ```python
 from synthetic_experiments.analysis.survey import create_survey_experiment_protocol
 
-# Create protocol
+# Create protocol with Bail et al. survey
 protocol = create_survey_experiment_protocol(
     provider_class=OllamaProvider,
     provider_kwargs={"model_name": "llama3.2"},
-    advisor_persona=advisor,
-    seed=42
+    advisor_persona=advisor_persona,
+    seed=42,
+    survey="bail2018"  # or "default"
 )
 
 # The protocol documents the steps:
 for step, desc in protocol["protocol"].items():
     print(f"{step}: {desc}")
+
+# Key steps:
+# 1. admin.administer_pre_survey() - fresh LLM baseline
+# 2. Create advisor ConversationAgent
+# 3. Run conversation experiment  
+# 4. admin.administer_post_survey(advisor_agent) - with context
+# 5. calculate_polarization_delta(pre, post)
 ```
 
 ### Running a Full Pre/Post Study
 
 ```python
 from synthetic_experiments.experiments import Experiment
+from synthetic_experiments.agents import ConversationAgent
 import json
 
 results = []
@@ -468,36 +495,43 @@ results = []
 # For each condition (e.g., liberal user, conservative user, moderate user)
 for user_persona_path in ["liberal_user.yaml", "conservative_user.yaml", "moderate_user.yaml"]:
     # Load personas
-    user = Persona.from_yaml(f"personas/{user_persona_path}")
-    advisor = Persona.from_yaml("personas/neutral_advisor.yaml")
+    user_persona = Persona.from_yaml(f"personas/{user_persona_path}")
+    advisor_persona = Persona.from_yaml("personas/neutral_advisor.yaml")
     
-    # Create fresh administrator for this condition
+    # Create survey administrator (use Bail et al. 2018 survey)
     admin = SurveyAdministrator(
         provider_class=OllamaProvider,
         provider_kwargs={"model_name": "llama3.2"},
-        persona=advisor,
-        seed=42
+        persona=advisor_persona,
+        seed=42,
+        survey="bail2018"
     )
     
-    # 1. Pre-survey
-    pre_results = admin.administer_survey("pre")
+    # 1. Pre-survey (fresh LLM - baseline)
+    pre_results = admin.administer_pre_survey()
     
-    # 2. Run conversation (use a separate agent with same seed)
-    # ... experiment code here ...
+    # 2. Create advisor agent and run conversation
+    advisor_provider = OllamaProvider(model_name="llama3.2")
+    advisor_agent = ConversationAgent(
+        provider=advisor_provider,
+        persona=advisor_persona,
+        role="assistant"
+    )
+    # ... run conversation experiment with advisor_agent ...
     
-    # 3. Post-survey  
-    post_results = admin.administer_survey("post")
+    # 3. Post-survey (with conversation in context!)
+    post_results = admin.administer_post_survey(advisor_agent)
     
-    # 4. Calculate delta
+    # 4. Calculate delta (treatment effect of conversation)
     delta = calculate_polarization_delta(pre_results, post_results)
     
     results.append({
         "condition": user_persona_path,
-        "pre_affective": pre_results.affective_score,
-        "post_affective": post_results.affective_score,
-        "delta_affective": delta.affective_delta,
+        "pre_ideological": pre_results.ideological_score,
+        "post_ideological": post_results.ideological_score,
         "delta_ideological": delta.ideological_delta,
-        "delta_overall": delta.overall_delta
+        "delta_overall": delta.overall_delta,
+        "conversation_turns": post_results.metadata.get("conversation_turns_in_context", 0)
     })
 
 # Export results
