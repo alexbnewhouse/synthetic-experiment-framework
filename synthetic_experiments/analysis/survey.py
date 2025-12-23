@@ -6,17 +6,17 @@ to measure changes in affective and ideological polarization as a result
 of conversations with differently-slanted user personas.
 
 Key Design Principles:
-    - Survey responses are generated with isolated LLM instances (no context leakage)
-    - Random seeds ensure reproducibility and identical LLM initialization
-    - Surveys measure both affective polarization (feelings toward groups) and
-      ideological polarization (strength of policy positions)
+    - Pre-survey: Fresh LLM instance (baseline measurement, no context)
+    - Post-survey: Same agent with conversation history in context window
+    - This measures how conversations affect LLM survey responses
+    - Random seeds ensure reproducible LLM initialization for pre-survey
 
 Example:
     >>> from synthetic_experiments.analysis.survey import (
     ...     PolarizationSurvey, SurveyAdministrator, calculate_polarization_delta
     ... )
     >>> from synthetic_experiments.providers import OllamaProvider
-    >>> from synthetic_experiments.agents import Persona
+    >>> from synthetic_experiments.agents import Persona, ConversationAgent
     >>>
     >>> # Create survey administrator with a seed for reproducibility
     >>> admin = SurveyAdministrator(
@@ -26,15 +26,19 @@ Example:
     ...     seed=42
     ... )
     >>>
-    >>> # Administer pre-survey (fresh LLM instance)
-    >>> pre_results = admin.administer_survey(survey_type="pre")
+    >>> # Administer pre-survey (fresh LLM instance - baseline)
+    >>> pre_results = admin.administer_pre_survey()
     >>>
-    >>> # ... conduct conversation experiment ...
+    >>> # Create advisor agent for conversation (use same seed for reproducibility)
+    >>> advisor_provider = OllamaProvider(model_name="llama2")
+    >>> advisor = ConversationAgent(provider=advisor_provider, persona=persona)
     >>>
-    >>> # Administer post-survey (fresh LLM instance, same seed)
-    >>> post_results = admin.administer_survey(survey_type="post")
+    >>> # ... conduct conversation experiment with advisor ...
     >>>
-    >>> # Calculate polarization change
+    >>> # Administer post-survey to the SAME agent (with conversation in context)
+    >>> post_results = admin.administer_post_survey(advisor)
+    >>>
+    >>> # Calculate polarization change (treatment effect of conversation)
     >>> delta = calculate_polarization_delta(pre_results, post_results)
 """
 
@@ -52,6 +56,7 @@ from synthetic_experiments.providers.base import (
     GenerationResult
 )
 from synthetic_experiments.agents.persona import Persona
+from synthetic_experiments.agents.agent import ConversationAgent
 
 logger = logging.getLogger(__name__)
 
@@ -368,16 +373,22 @@ class PolarizationSurvey:
 
 class SurveyAdministrator:
     """
-    Administers surveys to LLM agents with proper isolation.
+    Administers surveys to LLM agents for pre/post measurement.
     
-    This class ensures that:
-    1. Each survey is administered with a fresh LLM instance
-    2. Random seeds ensure reproducible, identical starting states
-    3. No context leaks between surveys or conversations
+    This class supports two modes of survey administration:
     
-    The key insight is that by using the same seed but fresh instances,
-    the LLM will have identical initialization for pre and post surveys,
-    with only the survey questions themselves differing.
+    1. Pre-survey (baseline): Creates a fresh LLM instance with no conversation
+       history. This measures the LLM's baseline attitudes before any treatment.
+    
+    2. Post-survey (with context): Administers survey to an existing 
+       ConversationAgent that has just completed a conversation. The conversation
+       history remains in the context window, allowing measurement of how the
+       conversation affected the LLM's responses.
+    
+    This design enables measuring the treatment effect of conversations:
+    - Treatment: The conversation with a user persona (e.g., liberal/conservative)
+    - Outcome: Change in survey responses from pre to post
+    - Mechanism: Conversation compressed in context window affects LLM output
     """
     
     def __init__(
@@ -396,7 +407,7 @@ class SurveyAdministrator:
             provider_class: The LLM provider class (e.g., OllamaProvider)
             provider_kwargs: Kwargs to pass to provider initialization
             persona: The advisor persona to use for surveys
-            seed: Random seed for reproducibility
+            seed: Random seed for reproducibility (used in pre-survey)
             temperature: Temperature for survey responses (lower = more consistent)
             survey: Survey instrument (uses default if None)
         """
@@ -451,7 +462,8 @@ class SurveyAdministrator:
         self,
         provider: LLMProvider,
         question: SurveyQuestion,
-        system_prompt: str
+        system_prompt: str,
+        conversation_history: Optional[List[Message]] = None
     ) -> SurveyResponse:
         """
         Administer a single survey question.
@@ -460,14 +472,21 @@ class SurveyAdministrator:
             provider: LLM provider to use
             question: Question to ask
             system_prompt: System prompt for persona
+            conversation_history: Optional conversation history to include in context
             
         Returns:
             SurveyResponse with the answer
         """
-        messages = [
-            Message(role="system", content=system_prompt),
-            Message(role="user", content=question.get_prompt())
-        ]
+        # Build message list
+        messages = [Message(role="system", content=system_prompt)]
+        
+        # If there's conversation history, include it in the context
+        # This is crucial for post-survey to have the conversation in context
+        if conversation_history:
+            messages.extend(conversation_history)
+        
+        # Add the survey question
+        messages.append(Message(role="user", content=question.get_prompt()))
         
         config = GenerationConfig(
             temperature=self.temperature,
@@ -596,31 +615,8 @@ class SurveyAdministrator:
             "overall_score": overall_score
         }
     
-    def administer_survey(
-        self,
-        survey_type: str = "pre",
-        additional_context: Optional[str] = None
-    ) -> SurveyResults:
-        """
-        Administer the full survey with a fresh LLM instance.
-        
-        This creates a new LLM provider instance to ensure no context
-        leakage from previous interactions. The same seed ensures
-        identical initialization.
-        
-        Args:
-            survey_type: "pre" or "post" (for metadata)
-            additional_context: Optional context to add to system prompt
-            
-        Returns:
-            SurveyResults with all responses and computed scores
-        """
-        logger.info(f"Administering {survey_type}-survey with seed {self.seed}")
-        
-        # Create fresh provider instance
-        provider = self._create_fresh_provider()
-        
-        # Build system prompt
+    def _build_survey_system_prompt(self, additional_context: Optional[str] = None) -> str:
+        """Build the system prompt for survey administration."""
         base_prompt = self.persona.to_system_prompt()
         survey_instructions = (
             "\n\nYou are now being asked to complete a brief survey. "
@@ -633,26 +629,22 @@ class SurveyAdministrator:
         if additional_context:
             system_prompt += f"\n\nContext: {additional_context}"
         
-        # Administer each question
-        responses = []
-        questions = self.survey.get_questions()
-        
-        for i, question in enumerate(questions):
-            logger.debug(f"Question {i+1}/{len(questions)}: {question.id}")
-            
-            # Note: Each question gets its own call with just the system prompt
-            # This prevents question-to-question context accumulation
-            response = self._administer_single_question(provider, question, system_prompt)
-            responses.append(response)
-        
-        # Calculate scores
+        return system_prompt
+    
+    def _build_results(
+        self,
+        survey_type: str,
+        responses: List[SurveyResponse],
+        questions: List[SurveyQuestion],
+        has_conversation_context: bool = False,
+        conversation_turns: int = 0
+    ) -> SurveyResults:
+        """Build SurveyResults from responses."""
         scores = self._calculate_scores(responses, questions)
-        
-        # Calculate valid response rate
         valid_count = sum(1 for r in responses if r.valid)
         valid_rate = valid_count / len(responses) if responses else 0.0
         
-        results = SurveyResults(
+        return SurveyResults(
             survey_type=survey_type,
             responses=responses,
             affective_score=scores["affective_score"],
@@ -665,18 +657,164 @@ class SurveyAdministrator:
                 "provider": self.provider_class.__name__,
                 "model": self.provider_kwargs.get("model_name", "unknown"),
                 "temperature": self.temperature,
-                "total_questions": len(questions)
+                "total_questions": len(questions),
+                "has_conversation_context": has_conversation_context,
+                "conversation_turns_in_context": conversation_turns
             }
+        )
+    
+    def administer_pre_survey(
+        self,
+        additional_context: Optional[str] = None
+    ) -> SurveyResults:
+        """
+        Administer the pre-survey with a fresh LLM instance (baseline).
+        
+        This creates a new LLM provider instance with NO conversation history.
+        This measures the baseline attitudes before any conversation treatment.
+        
+        Args:
+            additional_context: Optional context to add to system prompt
+            
+        Returns:
+            SurveyResults with baseline responses and scores
+        """
+        logger.info(f"Administering pre-survey (baseline) with seed {self.seed}")
+        
+        # Create fresh provider instance
+        provider = self._create_fresh_provider()
+        system_prompt = self._build_survey_system_prompt(additional_context)
+        
+        # Administer each question (no conversation history)
+        responses = []
+        questions = self.survey.get_questions()
+        
+        for i, question in enumerate(questions):
+            logger.debug(f"Pre-survey Q{i+1}/{len(questions)}: {question.id}")
+            response = self._administer_single_question(
+                provider, question, system_prompt, 
+                conversation_history=None  # No history for pre-survey
+            )
+            responses.append(response)
+        
+        results = self._build_results(
+            survey_type="pre",
+            responses=responses,
+            questions=questions,
+            has_conversation_context=False,
+            conversation_turns=0
         )
         
         logger.info(
-            f"{survey_type.capitalize()}-survey complete: "
-            f"affective={scores['affective_score']:.3f}, "
-            f"ideological={scores['ideological_score']:.3f}, "
-            f"valid_rate={valid_rate:.1%}"
+            f"Pre-survey complete: "
+            f"affective={results.affective_score:.3f}, "
+            f"ideological={results.ideological_score:.3f}, "
+            f"valid_rate={results.valid_response_rate:.1%}"
         )
         
         return results
+    
+    def administer_post_survey(
+        self,
+        agent: ConversationAgent,
+        additional_context: Optional[str] = None
+    ) -> SurveyResults:
+        """
+        Administer the post-survey to an agent WITH conversation history in context.
+        
+        This is the key method for measuring treatment effects. The conversation
+        history from the agent's recent conversation remains in the context window,
+        allowing measurement of how the conversation affected survey responses.
+        
+        Args:
+            agent: The ConversationAgent that just completed the conversation.
+                   Its conversation_history will be included in the context.
+            additional_context: Optional additional context to add to system prompt
+            
+        Returns:
+            SurveyResults with post-conversation responses and scores
+            
+        Note:
+            The agent's conversation history is preserved and included with each
+            survey question. This means the LLM "remembers" the conversation when
+            answering the survey, which is the treatment effect we're measuring.
+        """
+        conversation_turns = len(agent.conversation_history)
+        logger.info(
+            f"Administering post-survey to agent '{agent.name}' "
+            f"with {conversation_turns} turns of conversation in context"
+        )
+        
+        # Use the agent's existing provider (same instance that had the conversation)
+        provider = agent.provider
+        system_prompt = self._build_survey_system_prompt(additional_context)
+        
+        # Get the conversation history from the agent
+        conversation_history = agent.get_history()
+        
+        # Administer each question WITH conversation history in context
+        responses = []
+        questions = self.survey.get_questions()
+        
+        for i, question in enumerate(questions):
+            logger.debug(f"Post-survey Q{i+1}/{len(questions)}: {question.id}")
+            response = self._administer_single_question(
+                provider, question, system_prompt,
+                conversation_history=conversation_history  # Include conversation!
+            )
+            responses.append(response)
+        
+        results = self._build_results(
+            survey_type="post",
+            responses=responses,
+            questions=questions,
+            has_conversation_context=True,
+            conversation_turns=conversation_turns
+        )
+        
+        logger.info(
+            f"Post-survey complete (with {conversation_turns} turns in context): "
+            f"affective={results.affective_score:.3f}, "
+            f"ideological={results.ideological_score:.3f}, "
+            f"valid_rate={results.valid_response_rate:.1%}"
+        )
+        
+        return results
+    
+    def administer_survey(
+        self,
+        survey_type: str = "pre",
+        agent: Optional[ConversationAgent] = None,
+        additional_context: Optional[str] = None
+    ) -> SurveyResults:
+        """
+        Administer a survey (convenience method that dispatches to appropriate method).
+        
+        For pre-survey: Creates fresh LLM instance, no conversation context.
+        For post-survey: Uses the provided agent with conversation history in context.
+        
+        Args:
+            survey_type: "pre" or "post"
+            agent: Required for post-survey - the agent with conversation history
+            additional_context: Optional context to add to system prompt
+            
+        Returns:
+            SurveyResults with responses and computed scores
+            
+        Raises:
+            ValueError: If survey_type is "post" but no agent is provided
+        """
+        if survey_type == "pre":
+            return self.administer_pre_survey(additional_context)
+        elif survey_type == "post":
+            if agent is None:
+                raise ValueError(
+                    "Post-survey requires an agent with conversation history. "
+                    "Provide the ConversationAgent that just completed the conversation."
+                )
+            return self.administer_post_survey(agent, additional_context)
+        else:
+            raise ValueError(f"survey_type must be 'pre' or 'post', got: {survey_type}")
 
 
 @dataclass
@@ -740,10 +878,12 @@ def create_survey_experiment_protocol(
     Create a complete experimental protocol for a pre/post survey study.
     
     This helper function sets up the survey administrator and returns
-    a protocol that can be used to:
-    1. Administer pre-survey (fresh LLM instance)
-    2. Conduct conversation (separate from surveys)
-    3. Administer post-survey (fresh LLM instance, same seed)
+    a protocol for measuring how conversations affect LLM survey responses.
+    
+    The key insight: The post-survey is administered to the SAME agent that
+    just had the conversation, with the conversation history still in the
+    context window. This allows measuring how compressed conversations
+    in context affect LLM outputs.
     
     Args:
         provider_class: LLM provider class
@@ -765,16 +905,17 @@ def create_survey_experiment_protocol(
         "administrator": admin,
         "seed": seed,
         "protocol": {
-            "step_1": "Administer pre-survey: admin.administer_survey('pre')",
-            "step_2": "Create FRESH conversation agent with SAME seed",
-            "step_3": "Run conversation experiment",
-            "step_4": "Administer post-survey: admin.administer_survey('post')",
-            "step_5": "Calculate delta: calculate_polarization_delta(pre, post)"
+            "step_1": "Administer pre-survey (baseline): pre = admin.administer_pre_survey()",
+            "step_2": "Create conversation agent for the advisor",
+            "step_3": "Run conversation experiment (advisor talks with user)",
+            "step_4": "Administer post-survey WITH conversation in context: post = admin.administer_post_survey(advisor_agent)",
+            "step_5": "Calculate delta: delta = calculate_polarization_delta(pre, post)"
         },
         "notes": [
-            "Each survey creates a fresh LLM instance to prevent context leakage",
-            "The same seed ensures identical LLM initialization across all phases",
-            "The conversation should use a SEPARATE agent instance",
-            "Treatment effect = post_score - pre_score"
+            "Pre-survey: Fresh LLM, no context (baseline measurement)",
+            "Post-survey: Uses advisor agent WITH conversation history in context",
+            "This measures how conversation in context window affects LLM responses",
+            "Treatment = conversation with user persona (e.g., liberal/conservative)",
+            "Outcome = change in survey responses (delta)"
         ]
     }

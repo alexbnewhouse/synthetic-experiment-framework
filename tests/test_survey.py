@@ -499,3 +499,143 @@ class TestContextIsolation:
         # Each should be a distinct instance
         assert len(set(id(p) for p in providers)) == 3
 
+
+class TestPostSurveyWithContext:
+    """Tests for post-survey administration with conversation context."""
+    
+    def test_post_survey_requires_agent(self):
+        """Test that post-survey raises error without agent."""
+        from synthetic_experiments.providers.ollama import OllamaProvider
+        admin = SurveyAdministrator(
+            provider_class=OllamaProvider,
+            provider_kwargs={"model_name": "llama3.2"},
+            persona=Persona(name="Test"),
+            seed=42
+        )
+        
+        with pytest.raises(ValueError, match="requires an agent"):
+            admin.administer_survey(survey_type="post", agent=None)
+    
+    def test_invalid_survey_type_raises(self):
+        """Test that invalid survey type raises error."""
+        from synthetic_experiments.providers.ollama import OllamaProvider
+        admin = SurveyAdministrator(
+            provider_class=OllamaProvider,
+            provider_kwargs={"model_name": "llama3.2"},
+            persona=Persona(name="Test"),
+            seed=42
+        )
+        
+        with pytest.raises(ValueError, match="must be 'pre' or 'post'"):
+            admin.administer_survey(survey_type="invalid")
+    
+    def test_administer_single_question_with_history(self):
+        """Test that single question can include conversation history."""
+        from synthetic_experiments.providers.ollama import OllamaProvider
+        from synthetic_experiments.agents.agent import ConversationAgent
+        
+        # Create mock provider
+        mock_provider = Mock(spec=LLMProvider)
+        mock_result = Mock()
+        mock_result.message.content = "5"
+        mock_result.tokens_used = 10
+        mock_result.finish_reason = "stop"
+        mock_provider.generate.return_value = mock_result
+        
+        admin = SurveyAdministrator(
+            provider_class=OllamaProvider,
+            provider_kwargs={"model_name": "llama3.2"},
+            persona=Persona(name="Test"),
+            seed=42
+        )
+        
+        question = SurveyQuestion(
+            id="test_q",
+            text="Test question",
+            scale_min=1,
+            scale_max=7,
+            polarization_type=PolarizationType.AFFECTIVE
+        )
+        
+        # Create conversation history
+        conversation_history = [
+            Message(role="user", content="Hello"),
+            Message(role="assistant", content="Hi there!"),
+        ]
+        
+        response = admin._administer_single_question(
+            mock_provider,
+            question,
+            "System prompt",
+            conversation_history=conversation_history
+        )
+        
+        # Verify the provider was called with history included
+        call_args = mock_provider.generate.call_args
+        messages = call_args[0][0]
+        
+        # Should have: system + 2 history messages + question = 4 messages
+        assert len(messages) == 4
+        assert messages[0].role == "system"
+        assert messages[1].content == "Hello"
+        assert messages[2].content == "Hi there!"
+    
+    def test_results_metadata_includes_context_info(self):
+        """Test that results metadata indicates whether conversation context was used."""
+        pre_results = SurveyResults(
+            survey_type="pre",
+            responses=[],
+            affective_score=0.5,
+            ideological_score=0.5,
+            overall_score=0.5,
+            valid_response_rate=1.0,
+            metadata={
+                "has_conversation_context": False,
+                "conversation_turns_in_context": 0
+            }
+        )
+        
+        post_results = SurveyResults(
+            survey_type="post",
+            responses=[],
+            affective_score=0.6,
+            ideological_score=0.6,
+            overall_score=0.6,
+            valid_response_rate=1.0,
+            metadata={
+                "has_conversation_context": True,
+                "conversation_turns_in_context": 20
+            }
+        )
+        
+        assert pre_results.metadata["has_conversation_context"] is False
+        assert post_results.metadata["has_conversation_context"] is True
+        assert post_results.metadata["conversation_turns_in_context"] == 20
+    
+    def test_build_survey_system_prompt(self):
+        """Test building survey system prompt."""
+        from synthetic_experiments.providers.ollama import OllamaProvider
+        admin = SurveyAdministrator(
+            provider_class=OllamaProvider,
+            provider_kwargs={"model_name": "llama3.2"},
+            persona=Persona(name="Test Advisor", background="A helpful advisor"),
+            seed=42
+        )
+        
+        prompt = admin._build_survey_system_prompt()
+        assert "Test Advisor" in prompt
+        assert "survey" in prompt.lower()
+        assert "number" in prompt.lower()
+    
+    def test_build_survey_system_prompt_with_context(self):
+        """Test building survey system prompt with additional context."""
+        from synthetic_experiments.providers.ollama import OllamaProvider
+        admin = SurveyAdministrator(
+            provider_class=OllamaProvider,
+            provider_kwargs={"model_name": "llama3.2"},
+            persona=Persona(name="Test"),
+            seed=42
+        )
+        
+        prompt = admin._build_survey_system_prompt(additional_context="Extra info")
+        assert "Extra info" in prompt
