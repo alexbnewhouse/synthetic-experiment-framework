@@ -10,10 +10,12 @@ from synthetic_experiments.analysis.survey import (
     SurveyResponse,
     SurveyResults,
     PolarizationSurvey,
+    BailEtAlSurvey,
     SurveyAdministrator,
     PolarizationDelta,
     PolarizationType,
     calculate_polarization_delta,
+    list_available_surveys,
 )
 from synthetic_experiments.providers.base import LLMProvider, Message, GenerationConfig, GenerationResult
 from synthetic_experiments.agents.persona import Persona
@@ -207,6 +209,243 @@ class TestPolarizationSurvey:
         )
         value = admin._parse_numeric_response("10", 1, 7)
         assert value is None  # Out of range
+
+
+class TestBailEtAlSurvey:
+    """Tests for BailEtAlSurvey class - replicating Bail et al. (2018) PNAS."""
+    
+    def test_has_10_questions(self):
+        """Test that Bail et al. survey has exactly 10 questions."""
+        survey = BailEtAlSurvey()
+        assert len(survey.get_questions()) == 10
+    
+    def test_all_questions_are_ideological(self):
+        """Test that all questions are ideological type (policy positions)."""
+        survey = BailEtAlSurvey()
+        for question in survey.get_questions():
+            assert question.polarization_type == PolarizationType.IDEOLOGICAL
+    
+    def test_no_affective_questions(self):
+        """Test that there are no affective questions (per original study)."""
+        survey = BailEtAlSurvey()
+        assert len(survey.get_affective_questions()) == 0
+    
+    def test_ideological_questions_equal_all(self):
+        """Test that ideological questions equals all questions."""
+        survey = BailEtAlSurvey()
+        assert survey.get_ideological_questions() == survey.get_questions()
+    
+    def test_question_ids_are_prefixed(self):
+        """Test that all question IDs are prefixed with 'bail_'."""
+        survey = BailEtAlSurvey()
+        for question in survey.get_questions():
+            assert question.id.startswith("bail_"), f"Question {question.id} missing 'bail_' prefix"
+    
+    def test_7_point_scale(self):
+        """Test that all questions use 7-point scale like original study."""
+        survey = BailEtAlSurvey()
+        for question in survey.get_questions():
+            assert question.scale_min == 1
+            assert question.scale_max == 7
+    
+    def test_has_reverse_coded_questions(self):
+        """Test that some questions are reverse coded (liberal direction)."""
+        survey = BailEtAlSurvey()
+        reverse_coded = [q for q in survey.get_questions() if q.reverse_coded]
+        assert len(reverse_coded) > 0, "Should have some reverse-coded questions"
+        # Specifically: racial_discrim, immigrants_strengthen, corps_profit, homosexuality
+        assert len(reverse_coded) == 4
+    
+    def test_compute_conservatism_score_neutral(self):
+        """Test conservatism score computation with neutral responses."""
+        survey = BailEtAlSurvey()
+        # All neutral (4) responses
+        responses = [
+            SurveyResponse(question_id=q.id, raw_response="4", numeric_value=4)
+            for q in survey.get_questions()
+        ]
+        score = survey.compute_conservatism_score(responses)
+        assert score == 4.0  # Neutral midpoint
+    
+    def test_compute_conservatism_score_max_conservative(self):
+        """Test conservatism score with max conservative responses."""
+        survey = BailEtAlSurvey()
+        responses = []
+        for q in survey.get_questions():
+            if q.reverse_coded:
+                # For reverse-coded items, 1 = conservative position
+                responses.append(SurveyResponse(
+                    question_id=q.id, raw_response="1", numeric_value=1
+                ))
+            else:
+                # For normal items, 7 = conservative position
+                responses.append(SurveyResponse(
+                    question_id=q.id, raw_response="7", numeric_value=7
+                ))
+        score = survey.compute_conservatism_score(responses)
+        assert score == 7.0  # Max conservative
+    
+    def test_compute_conservatism_score_max_liberal(self):
+        """Test conservatism score with max liberal responses."""
+        survey = BailEtAlSurvey()
+        responses = []
+        for q in survey.get_questions():
+            if q.reverse_coded:
+                # For reverse-coded items, 7 = liberal position
+                responses.append(SurveyResponse(
+                    question_id=q.id, raw_response="7", numeric_value=7
+                ))
+            else:
+                # For normal items, 1 = liberal position
+                responses.append(SurveyResponse(
+                    question_id=q.id, raw_response="1", numeric_value=1
+                ))
+        score = survey.compute_conservatism_score(responses)
+        assert score == 1.0  # Max liberal
+    
+    def test_compute_conservatism_score_handles_invalid(self):
+        """Test that invalid responses are skipped in scoring."""
+        survey = BailEtAlSurvey()
+        responses = [
+            SurveyResponse(question_id="bail_govt_reg", raw_response="7", numeric_value=7),
+            SurveyResponse(question_id="bail_poor_easy", raw_response="invalid", numeric_value=None),
+        ]
+        score = survey.compute_conservatism_score(responses)
+        assert score == 7.0  # Only valid response counted
+    
+    def test_compute_conservatism_score_empty_returns_neutral(self):
+        """Test that empty responses return neutral midpoint."""
+        survey = BailEtAlSurvey()
+        score = survey.compute_conservatism_score([])
+        assert score == 4.0
+    
+    def test_custom_questions_appended(self):
+        """Test that custom questions can be appended."""
+        custom_q = SurveyQuestion(
+            id="custom_test",
+            text="Custom question",
+            polarization_type=PolarizationType.IDEOLOGICAL
+        )
+        survey = BailEtAlSurvey(custom_questions=[custom_q])
+        assert len(survey.get_questions()) == 11
+        assert survey.get_questions()[-1].id == "custom_test"
+
+
+class TestSurveyTypeSelection:
+    """Tests for survey type selection in SurveyAdministrator."""
+    
+    def test_default_survey_is_polarization(self):
+        """Test that default survey is PolarizationSurvey."""
+        from synthetic_experiments.providers.ollama import OllamaProvider
+        admin = SurveyAdministrator(
+            provider_class=OllamaProvider,
+            provider_kwargs={"model_name": "llama3.2"},
+            persona=Persona(name="Test"),
+        )
+        assert isinstance(admin.survey, PolarizationSurvey)
+    
+    def test_bail2018_survey_type(self):
+        """Test selecting Bail et al. (2018) survey by string."""
+        from synthetic_experiments.providers.ollama import OllamaProvider
+        admin = SurveyAdministrator(
+            provider_class=OllamaProvider,
+            provider_kwargs={"model_name": "llama3.2"},
+            persona=Persona(name="Test"),
+            survey="bail2018"
+        )
+        assert isinstance(admin.survey, BailEtAlSurvey)
+    
+    def test_bail_alias_works(self):
+        """Test 'bail' alias for Bail et al. survey."""
+        from synthetic_experiments.providers.ollama import OllamaProvider
+        admin = SurveyAdministrator(
+            provider_class=OllamaProvider,
+            provider_kwargs={"model_name": "llama3.2"},
+            persona=Persona(name="Test"),
+            survey="bail"
+        )
+        assert isinstance(admin.survey, BailEtAlSurvey)
+    
+    def test_bail_et_al_alias_works(self):
+        """Test 'bail_et_al' alias for Bail et al. survey."""
+        from synthetic_experiments.providers.ollama import OllamaProvider
+        admin = SurveyAdministrator(
+            provider_class=OllamaProvider,
+            provider_kwargs={"model_name": "llama3.2"},
+            persona=Persona(name="Test"),
+            survey="bail_et_al"
+        )
+        assert isinstance(admin.survey, BailEtAlSurvey)
+    
+    def test_default_string_works(self):
+        """Test 'default' string selects PolarizationSurvey."""
+        from synthetic_experiments.providers.ollama import OllamaProvider
+        admin = SurveyAdministrator(
+            provider_class=OllamaProvider,
+            provider_kwargs={"model_name": "llama3.2"},
+            persona=Persona(name="Test"),
+            survey="default"
+        )
+        assert isinstance(admin.survey, PolarizationSurvey)
+    
+    def test_case_insensitive(self):
+        """Test that survey type string is case insensitive."""
+        from synthetic_experiments.providers.ollama import OllamaProvider
+        admin = SurveyAdministrator(
+            provider_class=OllamaProvider,
+            provider_kwargs={"model_name": "llama3.2"},
+            persona=Persona(name="Test"),
+            survey="BAIL2018"
+        )
+        assert isinstance(admin.survey, BailEtAlSurvey)
+    
+    def test_invalid_survey_type_raises(self):
+        """Test that invalid survey type raises ValueError."""
+        from synthetic_experiments.providers.ollama import OllamaProvider
+        with pytest.raises(ValueError, match="Unknown survey type"):
+            SurveyAdministrator(
+                provider_class=OllamaProvider,
+                provider_kwargs={"model_name": "llama3.2"},
+                persona=Persona(name="Test"),
+                survey="invalid_type"
+            )
+    
+    def test_custom_survey_instance(self):
+        """Test passing custom survey instance."""
+        from synthetic_experiments.providers.ollama import OllamaProvider
+        custom_survey = BailEtAlSurvey()
+        admin = SurveyAdministrator(
+            provider_class=OllamaProvider,
+            provider_kwargs={"model_name": "llama3.2"},
+            persona=Persona(name="Test"),
+            survey=custom_survey
+        )
+        assert admin.survey is custom_survey
+
+
+class TestListAvailableSurveys:
+    """Tests for list_available_surveys function."""
+    
+    def test_returns_dict(self):
+        """Test that function returns a dictionary."""
+        result = list_available_surveys()
+        assert isinstance(result, dict)
+    
+    def test_contains_default(self):
+        """Test that 'default' is in available surveys."""
+        result = list_available_surveys()
+        assert "default" in result
+    
+    def test_contains_bail2018(self):
+        """Test that 'bail2018' is in available surveys."""
+        result = list_available_surveys()
+        assert "bail2018" in result
+    
+    def test_descriptions_are_strings(self):
+        """Test that all descriptions are strings."""
+        result = list_available_surveys()
+        for key, value in result.items():
+            assert isinstance(value, str)
 
 
 class TestPolarizationDelta:

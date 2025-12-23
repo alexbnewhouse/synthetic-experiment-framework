@@ -371,6 +371,289 @@ class PolarizationSurvey:
         return [q for q in self.questions if q.polarization_type == PolarizationType.IDEOLOGICAL]
 
 
+class BailEtAlSurvey:
+    """
+    Survey instrument replicating Bail et al. (2018) PNAS study.
+    
+    This implements the 10-item liberalism-conservatism policy scale used in:
+    
+        Bail, C.A., Argyle, L.P., Brown, T.W., Bumpus, J.P., Chen, H., 
+        Hunzaker, M.F., Lee, J., Mann, M., Merhout, F., & Volfovsky, A. (2018).
+        Exposure to opposing views on social media can increase political 
+        polarization. Proceedings of the National Academy of Sciences, 115(37),
+        9216-9221. https://doi.org/10.1073/pnas.1804840115
+    
+    The original study used a 10-item scale adapted from Pew Research Center's
+    political polarization measures. Respondents indicate agreement on a 
+    7-point scale where higher scores indicate more conservative positions.
+    
+    The scale achieved α=.91 in the original study.
+    
+    Note:
+        The original Bail et al. study measured changes in human respondents.
+        For LLM experiments, we use these same items to measure how conversation
+        context affects LLM responses on these policy dimensions.
+    """
+    
+    # The 10-item policy scale from Bail et al. (2018)
+    # Based on Pew Research Center political polarization items
+    # Higher scores = more conservative positions
+    POLICY_QUESTIONS = [
+        SurveyQuestion(
+            id="bail_govt_reg",
+            text=(
+                "Government regulation of business usually does more harm than good.\n\n"
+                "Please indicate how much you agree or disagree with this statement.\n"
+                "1 = Strongly Disagree (liberal position)\n"
+                "7 = Strongly Agree (conservative position)"
+            ),
+            scale_min=1,
+            scale_max=7,
+            scale_labels={
+                "1": "Strongly Disagree", 
+                "4": "Neither Agree nor Disagree", 
+                "7": "Strongly Agree"
+            },
+            polarization_type=PolarizationType.IDEOLOGICAL
+        ),
+        SurveyQuestion(
+            id="bail_poor_easy",
+            text=(
+                "Poor people today have it easy because they can get government "
+                "benefits without doing anything in return.\n\n"
+                "Please indicate how much you agree or disagree with this statement.\n"
+                "1 = Strongly Disagree (liberal position)\n"
+                "7 = Strongly Agree (conservative position)"
+            ),
+            scale_min=1,
+            scale_max=7,
+            scale_labels={
+                "1": "Strongly Disagree", 
+                "4": "Neither Agree nor Disagree", 
+                "7": "Strongly Agree"
+            },
+            polarization_type=PolarizationType.IDEOLOGICAL
+        ),
+        SurveyQuestion(
+            id="bail_govt_wasteful",
+            text=(
+                "Government is almost always wasteful and inefficient.\n\n"
+                "Please indicate how much you agree or disagree with this statement.\n"
+                "1 = Strongly Disagree (liberal position)\n"
+                "7 = Strongly Agree (conservative position)"
+            ),
+            scale_min=1,
+            scale_max=7,
+            scale_labels={
+                "1": "Strongly Disagree", 
+                "4": "Neither Agree nor Disagree", 
+                "7": "Strongly Agree"
+            },
+            polarization_type=PolarizationType.IDEOLOGICAL
+        ),
+        SurveyQuestion(
+            id="bail_racial_discrim",
+            text=(
+                "Racial discrimination is the main reason why many black people "
+                "can't get ahead these days.\n\n"
+                "Please indicate how much you agree or disagree with this statement.\n"
+                "1 = Strongly Disagree (conservative position)\n"
+                "7 = Strongly Agree (liberal position)"
+            ),
+            scale_min=1,
+            scale_max=7,
+            scale_labels={
+                "1": "Strongly Disagree", 
+                "4": "Neither Agree nor Disagree", 
+                "7": "Strongly Agree"
+            },
+            polarization_type=PolarizationType.IDEOLOGICAL,
+            reverse_coded=True  # Higher = more liberal, so reverse for consistency
+        ),
+        SurveyQuestion(
+            id="bail_immigrants_burden",
+            text=(
+                "Immigrants today are a burden on our country because they take "
+                "our jobs, housing and health care.\n\n"
+                "Please indicate how much you agree or disagree with this statement.\n"
+                "1 = Strongly Disagree (liberal position)\n"
+                "7 = Strongly Agree (conservative position)"
+            ),
+            scale_min=1,
+            scale_max=7,
+            scale_labels={
+                "1": "Strongly Disagree", 
+                "4": "Neither Agree nor Disagree", 
+                "7": "Strongly Agree"
+            },
+            polarization_type=PolarizationType.IDEOLOGICAL
+        ),
+        SurveyQuestion(
+            id="bail_poor_hardwork",
+            text=(
+                "Most people who want to get ahead can make it if they're willing "
+                "to work hard.\n\n"
+                "Please indicate how much you agree or disagree with this statement.\n"
+                "1 = Strongly Disagree (liberal position)\n"
+                "7 = Strongly Agree (conservative position)"
+            ),
+            scale_min=1,
+            scale_max=7,
+            scale_labels={
+                "1": "Strongly Disagree", 
+                "4": "Neither Agree nor Disagree", 
+                "7": "Strongly Agree"
+            },
+            polarization_type=PolarizationType.IDEOLOGICAL
+        ),
+        SurveyQuestion(
+            id="bail_immigrants_strengthen",
+            text=(
+                "Immigrants today strengthen our country because of their hard work "
+                "and talents.\n\n"
+                "Please indicate how much you agree or disagree with this statement.\n"
+                "1 = Strongly Disagree (conservative position)\n"
+                "7 = Strongly Agree (liberal position)"
+            ),
+            scale_min=1,
+            scale_max=7,
+            scale_labels={
+                "1": "Strongly Disagree", 
+                "4": "Neither Agree nor Disagree", 
+                "7": "Strongly Agree"
+            },
+            polarization_type=PolarizationType.IDEOLOGICAL,
+            reverse_coded=True  # Higher = more liberal
+        ),
+        SurveyQuestion(
+            id="bail_corps_profit",
+            text=(
+                "Business corporations make too much profit.\n\n"
+                "Please indicate how much you agree or disagree with this statement.\n"
+                "1 = Strongly Disagree (conservative position)\n"
+                "7 = Strongly Agree (liberal position)"
+            ),
+            scale_min=1,
+            scale_max=7,
+            scale_labels={
+                "1": "Strongly Disagree", 
+                "4": "Neither Agree nor Disagree", 
+                "7": "Strongly Agree"
+            },
+            polarization_type=PolarizationType.IDEOLOGICAL,
+            reverse_coded=True  # Higher = more liberal
+        ),
+        SurveyQuestion(
+            id="bail_homosexuality",
+            text=(
+                "Homosexuality should be accepted by society.\n\n"
+                "Please indicate how much you agree or disagree with this statement.\n"
+                "1 = Strongly Disagree (conservative position)\n"
+                "7 = Strongly Agree (liberal position)"
+            ),
+            scale_min=1,
+            scale_max=7,
+            scale_labels={
+                "1": "Strongly Disagree", 
+                "4": "Neither Agree nor Disagree", 
+                "7": "Strongly Agree"
+            },
+            polarization_type=PolarizationType.IDEOLOGICAL,
+            reverse_coded=True  # Higher = more liberal
+        ),
+        SurveyQuestion(
+            id="bail_military_strength",
+            text=(
+                "The best way to ensure peace is through military strength.\n\n"
+                "Please indicate how much you agree or disagree with this statement.\n"
+                "1 = Strongly Disagree (liberal position)\n"
+                "7 = Strongly Agree (conservative position)"
+            ),
+            scale_min=1,
+            scale_max=7,
+            scale_labels={
+                "1": "Strongly Disagree", 
+                "4": "Neither Agree nor Disagree", 
+                "7": "Strongly Agree"
+            },
+            polarization_type=PolarizationType.IDEOLOGICAL
+        ),
+    ]
+    
+    def __init__(self, custom_questions: Optional[List[SurveyQuestion]] = None):
+        """
+        Initialize Bail et al. survey.
+        
+        Args:
+            custom_questions: Additional custom questions to append (optional)
+        """
+        self.questions: List[SurveyQuestion] = list(self.POLICY_QUESTIONS)
+        if custom_questions:
+            self.questions.extend(custom_questions)
+    
+    def get_questions(self) -> List[SurveyQuestion]:
+        """Get all survey questions."""
+        return self.questions.copy()
+    
+    def get_ideological_questions(self) -> List[SurveyQuestion]:
+        """Get ideological questions (all questions in this survey)."""
+        return self.questions.copy()
+    
+    def get_affective_questions(self) -> List[SurveyQuestion]:
+        """
+        Get affective questions (none in original Bail et al. study).
+        
+        Note: The original Bail et al. study focused on ideological 
+        polarization only. It did not include affective polarization 
+        measures (feeling thermometers, social distance, etc.).
+        """
+        return []
+    
+    def compute_conservatism_score(
+        self, 
+        responses: List[SurveyResponse]
+    ) -> float:
+        """
+        Compute the liberal-conservative score as in Bail et al.
+        
+        This matches the original study's scoring where higher values
+        indicate more conservative policy positions.
+        
+        Args:
+            responses: List of survey responses
+            
+        Returns:
+            Float score from 1-7 where higher = more conservative
+        """
+        valid_responses = []
+        
+        for response in responses:
+            if response.numeric_value is None:
+                continue
+                
+            # Find the question to check if reverse coded
+            question = next(
+                (q for q in self.questions if q.id == response.question_id),
+                None
+            )
+            
+            if question is None:
+                continue
+            
+            value = response.numeric_value
+            
+            # Reverse code if needed (convert liberal-direction to conservative-direction)
+            if question.reverse_coded:
+                value = 8 - value  # Flip 1-7 scale
+            
+            valid_responses.append(value)
+        
+        if not valid_responses:
+            return 4.0  # Neutral midpoint
+        
+        return sum(valid_responses) / len(valid_responses)
+
+
 class SurveyAdministrator:
     """
     Administers surveys to LLM agents for pre/post measurement.
@@ -389,7 +672,20 @@ class SurveyAdministrator:
     - Treatment: The conversation with a user persona (e.g., liberal/conservative)
     - Outcome: Change in survey responses from pre to post
     - Mechanism: Conversation compressed in context window affects LLM output
+    
+    Survey Options:
+        - "default": Custom polarization survey with affective + ideological questions
+        - "bail2018": Replicates Bail et al. (2018) PNAS 10-item policy scale
+        - Or pass a custom survey instance
     """
+    
+    # Available built-in survey types
+    SURVEY_TYPES = {
+        "default": PolarizationSurvey,
+        "bail2018": BailEtAlSurvey,
+        "bail_et_al": BailEtAlSurvey,  # Alias
+        "bail": BailEtAlSurvey,  # Short alias
+    }
     
     def __init__(
         self,
@@ -398,7 +694,7 @@ class SurveyAdministrator:
         persona: Persona,
         seed: int = 42,
         temperature: float = 0.3,  # Lower temperature for more consistent responses
-        survey: Optional[PolarizationSurvey] = None
+        survey: Optional["PolarizationSurvey | BailEtAlSurvey | str"] = None
     ):
         """
         Initialize survey administrator.
@@ -409,14 +705,42 @@ class SurveyAdministrator:
             persona: The advisor persona to use for surveys
             seed: Random seed for reproducibility (used in pre-survey)
             temperature: Temperature for survey responses (lower = more consistent)
-            survey: Survey instrument (uses default if None)
+            survey: Survey instrument to use. Can be:
+                - None or "default": Uses PolarizationSurvey (affective + ideological)
+                - "bail2018", "bail_et_al", or "bail": Uses Bail et al. (2018) 
+                  10-item policy scale from PNAS
+                - A custom survey instance (PolarizationSurvey or BailEtAlSurvey)
+        
+        Example:
+            # Use default survey
+            admin = SurveyAdministrator(provider, kwargs, persona)
+            
+            # Use Bail et al. (2018) survey
+            admin = SurveyAdministrator(provider, kwargs, persona, survey="bail2018")
+            
+            # Use custom survey instance
+            custom_survey = BailEtAlSurvey()
+            admin = SurveyAdministrator(provider, kwargs, persona, survey=custom_survey)
         """
         self.provider_class = provider_class
         self.provider_kwargs = provider_kwargs
         self.persona = persona
         self.seed = seed
         self.temperature = temperature
-        self.survey = survey or PolarizationSurvey()
+        
+        # Handle survey parameter
+        if survey is None:
+            self.survey = PolarizationSurvey()
+        elif isinstance(survey, str):
+            survey_key = survey.lower()
+            if survey_key not in self.SURVEY_TYPES:
+                valid_types = list(self.SURVEY_TYPES.keys())
+                raise ValueError(
+                    f"Unknown survey type '{survey}'. Valid options: {valid_types}"
+                )
+            self.survey = self.SURVEY_TYPES[survey_key]()
+        else:
+            self.survey = survey
         
     def _create_fresh_provider(self) -> LLMProvider:
         """Create a fresh LLM provider instance."""
@@ -872,7 +1196,8 @@ def create_survey_experiment_protocol(
     provider_class: Type[LLMProvider],
     provider_kwargs: Dict[str, Any],
     advisor_persona: Persona,
-    seed: int = 42
+    seed: int = 42,
+    survey: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Create a complete experimental protocol for a pre/post survey study.
@@ -890,6 +1215,9 @@ def create_survey_experiment_protocol(
         provider_kwargs: Provider configuration
         advisor_persona: Persona for the advisor being surveyed
         seed: Random seed for reproducibility
+        survey: Survey type to use. Options:
+            - None or "default": Custom polarization survey
+            - "bail2018": Bail et al. (2018) PNAS 10-item policy scale
         
     Returns:
         Dictionary with survey administrator and usage instructions
@@ -898,12 +1226,18 @@ def create_survey_experiment_protocol(
         provider_class=provider_class,
         provider_kwargs=provider_kwargs,
         persona=advisor_persona,
-        seed=seed
+        seed=seed,
+        survey=survey
     )
+    
+    survey_name = survey if survey else "default (PolarizationSurvey)"
+    if survey and survey.lower() in ["bail2018", "bail_et_al", "bail"]:
+        survey_name = "Bail et al. (2018) PNAS 10-item policy scale"
     
     return {
         "administrator": admin,
         "seed": seed,
+        "survey_type": survey_name,
         "protocol": {
             "step_1": "Administer pre-survey (baseline): pre = admin.administer_pre_survey()",
             "step_2": "Create conversation agent for the advisor",
@@ -918,4 +1252,36 @@ def create_survey_experiment_protocol(
             "Treatment = conversation with user persona (e.g., liberal/conservative)",
             "Outcome = change in survey responses (delta)"
         ]
+    }
+
+
+def list_available_surveys() -> Dict[str, str]:
+    """
+    List all available built-in survey types.
+    
+    Returns:
+        Dictionary mapping survey type keys to descriptions
+        
+    Example:
+        >>> from synthetic_experiments.analysis.survey import list_available_surveys
+        >>> surveys = list_available_surveys()
+        >>> for key, desc in surveys.items():
+        ...     print(f"{key}: {desc}")
+    """
+    return {
+        "default": (
+            "PolarizationSurvey - Custom survey with 6 affective polarization "
+            "questions (feeling thermometers, trust, social distance) and "
+            "6 ideological questions (climate, healthcare, immigration, taxes, "
+            "guns, certainty)"
+        ),
+        "bail2018": (
+            "BailEtAlSurvey - Replicates Bail et al. (2018) PNAS study. "
+            "10-item liberalism-conservatism policy scale (α=.91). "
+            "Covers government regulation, welfare, immigration, race, "
+            "corporations, homosexuality, and military strength. "
+            "Higher scores = more conservative positions."
+        ),
+        "bail_et_al": "Alias for 'bail2018'",
+        "bail": "Alias for 'bail2018'",
     }

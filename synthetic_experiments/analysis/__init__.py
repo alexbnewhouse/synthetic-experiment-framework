@@ -36,6 +36,7 @@ from synthetic_experiments.analysis.political import (
 
 from synthetic_experiments.analysis.survey import (
     PolarizationSurvey,
+    BailEtAlSurvey,
     SurveyAdministrator,
     SurveyResults,
     PolarizationDelta,
@@ -43,7 +44,8 @@ from synthetic_experiments.analysis.survey import (
     SurveyResponse,
     PolarizationType,
     calculate_polarization_delta,
-    create_survey_experiment_protocol
+    create_survey_experiment_protocol,
+    list_available_surveys
 )
 
 __all__ = [
@@ -63,6 +65,7 @@ __all__ = [
     "count_agreement_disagreement",
     # Survey instruments
     "PolarizationSurvey",
+    "BailEtAlSurvey",
     "SurveyAdministrator", 
     "SurveyResults",
     "PolarizationDelta",
@@ -71,4 +74,5 @@ __all__ = [
     "PolarizationType",
     "calculate_polarization_delta",
     "create_survey_experiment_protocol",
+    "list_available_surveys",
 ]
