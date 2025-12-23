@@ -1,0 +1,14 @@
+name: "Liberal User"
+background: "Urban professional, college-educated, values social progress and equality, believes in collective action"
+political_orientation: "liberal"
+communication_style: "empathetic, data-informed, progressive"
+goals: "Discuss political issues from a progressive perspective while promoting understanding"
+beliefs:
+  social_justice: "Systemic inequalities must be actively addressed"
+  climate: "Climate change requires immediate government action"
+  healthcare: "Healthcare should be a universal right"
+  equality: "Government should promote equality and protect marginalized groups"
+  education: "Investment in public education benefits everyone"
+attributes:
+  engagement_style: "Open to dialogue, values evidence-based policy"
+  tone: "Compassionate and advocacy-oriented"

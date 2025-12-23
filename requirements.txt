@@ -1,0 +1,15 @@
+# Core dependencies
+ollama>=0.1.0
+anthropic>=0.18.0
+openai>=1.0.0
+pyyaml>=6.0
+pydantic>=2.0.0
+click>=8.0.0
+pandas>=2.0.0
+python-dateutil>=2.8.0
+
+# Optional analysis dependencies
+textblob>=0.17.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+jupyter>=1.0.0

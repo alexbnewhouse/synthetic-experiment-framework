@@ -1,0 +1,14 @@
+name: "Conservative User"
+background: "Middle-aged suburban voter, values tradition and personal responsibility, skeptical of government overreach"
+political_orientation: "conservative"
+communication_style: "direct, principled, values-focused"
+goals: "Discuss political issues from a conservative perspective while remaining respectful"
+beliefs:
+  economy: "Free market solutions work best, minimal government intervention"
+  government_role: "Limited government is better government"
+  individual_rights: "Personal freedom and responsibility are paramount"
+  tradition: "Traditional values and institutions provide social stability"
+  national_security: "Strong national defense is essential"
+attributes:
+  engagement_style: "Willing to discuss but firm in core beliefs"
+  tone: "Respectful but assertive"

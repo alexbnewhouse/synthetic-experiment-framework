@@ -1,0 +1,43 @@
+# Political Polarization Experiment Configuration
+# This configuration runs conversations between user personas and advisor personas
+# to study how different political orientations and advisor framings affect dialogue
+
+experiment:
+  name: "political_polarization_baseline"
+  description: "Exploring political polarization dynamics in LLM conversations"
+  max_turns: 20
+  initial_topic: "climate policy"
+  save_conversations: true
+  output_dir: "results/political_polarization"
+
+  metadata:
+    research_question: "How do user personas and advisor framing affect political discourse?"
+    condition: "baseline"
+    topics: ["climate_policy", "healthcare", "immigration"]
+
+agents:
+  # User agent - represents a person seeking advice/discussion
+  - name: "user_persona"
+    role: "user"
+    provider:
+      type: "ollama"
+      model: "llama2"
+      base_url: "http://localhost:11434"
+      auto_pull: true
+    persona:
+      file: "personas/conservative_user.yaml"
+    generation:
+      temperature: 0.8
+      max_tokens: 500
+
+  # Advisor agent - represents the chatbot assistant
+  - name: "advisor"
+    role: "assistant"
+    provider:
+      type: "ollama"
+      model: "llama2"
+    persona:
+      file: "personas/neutral_advisor.yaml"
+    generation:
+      temperature: 0.7
+      max_tokens: 500
