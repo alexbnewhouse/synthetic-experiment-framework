@@ -41,7 +41,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
    - `metrics.py`: Basic conversation metrics (length, turns, tokens)
    - `political.py`: Political language detection, polarization metrics, opinion shift
    - `survey.py`: Pre/post survey system for measuring polarization treatment effects
+   - `visualization.py`: Matplotlib-based conversation visualization
    - `MetricCalculator`: Extensible framework for custom metrics
+
+7. **Advanced Features** (`synthetic_experiments/`)
+   - `costs.py`: API cost estimation before running experiments
+   - `parallel.py`: Concurrent experiment execution with progress tracking
+   - `comparison.py`: Cross-model comparison utilities
+   - `streaming.py`: Real-time conversation streaming with callbacks
+   - `continuation.py`: Save/resume interrupted experiments
+   - `stopping.py`: Smart stopping conditions (topic drift, repetition, consensus)
+   - `export.py`: Export to R, SPSS, Stata, Feather formats
+   - `widgets.py`: Jupyter interactive configurator widgets
+   - `rate_limiting.py`: API rate limiting (token bucket, sliding window)
+   - `branching.py`: Conversation forking for counterfactual analysis
 
 ## Development Commands
 
@@ -201,7 +214,8 @@ Experiment → Agents → Provider → LLM
 - `getting_started.md`: Installation and first experiment
 - `user_guide.md`: Complete feature walkthrough
 - `political_polarization_tutorial.md`: Research workflow example
-- `api_reference.md`: Detailed API docs (placeholder)
+- `advanced_features.md`: Guide to all advanced features (visualization, parallel, branching, etc.)
+- `api/`: Sphinx-based auto-generated API documentation
 
 ## Code Style and Conventions
 
@@ -383,20 +397,27 @@ tests/
 - `matplotlib`, `seaborn`: Visualization
 - `jupyter`: Interactive analysis
 
-## Future Enhancements (Not Yet Implemented)
-
-- API reference documentation (auto-generated Sphinx/mkdocs)
-- Streaming conversation support
-- Real-time metrics dashboard
-- More sophisticated stopping conditions
-- Conversation continuation/interruption
-
 ## Implemented Features
 
+### Core Framework
 - ✅ Unit tests (pytest) - 260+ tests with ~79% coverage
 - ✅ Pre/post survey system for measuring polarization treatment effects
 - ✅ CLI tool (`synthetic-exp` command) with run, survey, analyze, init, validate commands
 - ✅ Multi-agent (>2 participants) support with configurable turn order (round_robin, user_first, random)
+
+### Advanced Features (New Modules)
+- ✅ **Visualization** (`analysis/visualization.py`) - Plot sentiment/polarization trajectories, message lengths
+- ✅ **Cost Estimation** (`costs.py`) - Estimate API costs before running experiments
+- ✅ **Parallel Execution** (`parallel.py`) - Run multiple experiments concurrently with progress bars
+- ✅ **Model Comparison** (`comparison.py`) - Compare outcomes across different LLM models
+- ✅ **API Documentation** (`docs/api/`) - Sphinx configuration for auto-generated docs
+- ✅ **Streaming Support** (`streaming.py`) - Real-time conversation observation with callbacks
+- ✅ **Conversation Continuation** (`continuation.py`) - Save/resume interrupted experiments
+- ✅ **Smart Stopping Conditions** (`stopping.py`) - Stop on topic drift, sentiment extremes, repetition
+- ✅ **Statistical Export** (`export.py`) - Export to R, SPSS, Stata, Feather formats
+- ✅ **Jupyter Widgets** (`widgets.py`) - Interactive experiment configurator
+- ✅ **Rate Limiting** (`rate_limiting.py`) - Token bucket & sliding window limiters
+- ✅ **Conversation Branching** (`branching.py`) - Fork conversations for counterfactual analysis
 
 ## Critical Files to Understand
 

@@ -258,6 +258,44 @@ experiment = load_experiment_config("config.yaml")
 results = experiment.run()
 ```
 
+### 8. Advanced Features
+
+The framework includes powerful features for production research:
+
+```python
+# Cost estimation before running
+from synthetic_experiments import CostEstimator
+estimator = CostEstimator()
+cost = estimator.estimate_experiment("gpt-4", num_turns=20)
+print(f"Estimated cost: ${cost.total_cost:.2f}")
+
+# Parallel execution
+from synthetic_experiments import ParallelRunner
+runner = ParallelRunner(max_workers=4)
+results = runner.run_batch(experiments)
+
+# Rate limiting
+from synthetic_experiments import RateLimiter, RateLimitedProvider
+limiter = RateLimiter(requests_per_minute=60)
+provider = RateLimitedProvider(base_provider, limiter)
+
+# Conversation branching (counterfactual analysis)
+from synthetic_experiments import BranchingExperiment
+branching = BranchingExperiment(experiment)
+branching.fork_and_continue(turn=5, new_message="What if...")
+
+# Export to statistical software
+from synthetic_experiments import export_for_analysis
+export_for_analysis(results, "./data", formats=['csv', 'r', 'spss'])
+```
+
+See [Advanced Features Guide](docs/advanced_features.md) for complete documentation on:
+- Conversation visualization
+- Smart stopping conditions
+- Streaming support
+- Jupyter widgets
+- And more...
+
 ## Testing
 
 The framework includes a comprehensive test suite with 315+ tests covering all modules:
@@ -318,8 +356,9 @@ docs/
 
 - **[Getting Started](docs/getting_started.md)**: Installation and quick start
 - **[User Guide](docs/user_guide.md)**: Complete feature documentation
+- **[Advanced Features](docs/advanced_features.md)**: Visualization, parallel execution, branching, and more
 - **[Political Polarization Tutorial](docs/political_polarization_tutorial.md)**: Step-by-step research example
-- **[API Reference](docs/api_reference.md)**: Detailed API documentation
+- **API Documentation**: Run `python docs/generate_docs.py --serve` for auto-generated API docs
 
 ## Example: Political Polarization Study
 

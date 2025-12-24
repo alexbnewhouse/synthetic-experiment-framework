@@ -633,8 +633,51 @@ When adding new features, follow these conventions:
 4. Add integration tests for end-to-end workflows
 5. Aim for good coverage of edge cases
 
+## Advanced Features
+
+The framework includes many advanced features for production research workflows. See the **[Advanced Features Guide](advanced_features.md)** for complete documentation on:
+
+- **Visualization**: Plot sentiment trajectories, polarization over time, message lengths
+- **Cost Estimation**: Estimate API costs before running experiments
+- **Parallel Execution**: Run multiple experiments concurrently with progress bars
+- **Model Comparison**: Compare outcomes across different LLM models
+- **Streaming Support**: Watch conversations unfold in real-time
+- **Conversation Continuation**: Save and resume interrupted experiments
+- **Smart Stopping Conditions**: Stop on topic drift, repetition, consensus
+- **Statistical Export**: Export to R, SPSS, Stata formats
+- **Jupyter Widgets**: Interactive experiment configuration
+- **Rate Limiting**: Built-in API rate limiting
+- **Conversation Branching**: Fork conversations for counterfactual analysis
+
+Quick example:
+
+```python
+from synthetic_experiments import (
+    CostEstimator,
+    ParallelRunner,
+    BranchingExperiment,
+    export_for_analysis
+)
+
+# Estimate costs
+estimator = CostEstimator()
+cost = estimator.estimate_experiment("gpt-4", num_turns=20)
+
+# Run in parallel
+runner = ParallelRunner(max_workers=4)
+results = runner.run_batch(experiments)
+
+# Fork conversations
+branching = BranchingExperiment(experiment)
+branching.fork_and_continue(turn=5, new_message="What if...")
+
+# Export for R/SPSS
+export_for_analysis(results, "./data", formats=['csv', 'r', 'spss'])
+```
+
 ## Next Steps
 
-- Explore the [API Reference](api_reference.md) for detailed class/method documentation
+- Explore the [Advanced Features Guide](advanced_features.md) for visualization, parallel execution, and more
 - Follow the [Political Polarization Tutorial](political_polarization_tutorial.md) for a complete research example
+- Run `python docs/generate_docs.py --serve` for auto-generated API documentation
 - Check out example scripts in `examples/` directory
