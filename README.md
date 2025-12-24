@@ -184,6 +184,12 @@ print(f"Ideological shift: {delta.ideological_delta:+.3f}")
 - Post-survey: Includes conversation history in context window
 - Measures how compressed conversations affect LLM responses
 - Built-in surveys: `"default"` (affective + ideological) or `"bail2018"` (PNAS replication)
+- Example: see `examples/bail2018_pre_post.py` for a minimal runnable pre/post flow.
+
+**How to choose a survey:**
+- Use `survey="default"` when you want both affective and ideological measures (12 items).
+- Use `survey="bail2018"` to replicate the Bail et al. (2018) PNAS 10-item policy scale (higher = more conservative).
+- Pass a custom survey instance if you need bespoke questions or scoring.
 
 ### 6. Experimental Design Support
 
