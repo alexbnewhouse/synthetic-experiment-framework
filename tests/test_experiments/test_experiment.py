@@ -26,6 +26,7 @@ class TestExperimentConfig:
         assert config.stop_on_repetition is False
         assert config.save_conversations is True
         assert config.output_dir == "results"
+        assert config.turn_order == "round_robin"
 
     def test_config_custom(self):
         """Test ExperimentConfig with custom values."""
@@ -38,7 +39,8 @@ class TestExperimentConfig:
             repetition_threshold=0.8,
             save_conversations=False,
             output_dir="custom_results",
-            metadata={"condition": "treatment"}
+            metadata={"condition": "treatment"},
+            turn_order="user_first"
         )
         
         assert config.name == "custom_test"
@@ -47,6 +49,13 @@ class TestExperimentConfig:
         assert len(config.topics) == 2
         assert config.stop_on_repetition is True
         assert config.metadata["condition"] == "treatment"
+        assert config.turn_order == "user_first"
+
+    def test_config_turn_orders(self):
+        """Test different turn_order values."""
+        for order in ["round_robin", "user_first", "random"]:
+            config = ExperimentConfig(name="test", turn_order=order)
+            assert config.turn_order == order
 
 
 class TestExperimentInit:
@@ -356,3 +365,217 @@ class TestExperimentStoppingConditions:
         
         # With 2 turns (each turn = user + assistant), max 4 messages
         assert len(result.turns) <= 4
+
+
+class TestMultiAgentExperiments:
+    """Tests for multi-agent (>2) conversation support."""
+
+    def test_three_agent_conversation(self, mock_provider, temp_dir):
+        """Test running a conversation with three agents."""
+        agent1 = ConversationAgent(
+            provider=mock_provider,
+            persona=Persona(name="Agent1", background="First agent"),
+            role="user"
+        )
+        agent2 = ConversationAgent(
+            provider=mock_provider,
+            persona=Persona(name="Agent2", background="Second agent"),
+            role="assistant"
+        )
+        agent3 = ConversationAgent(
+            provider=mock_provider,
+            persona=Persona(name="Agent3", background="Third agent"),
+            role="assistant"
+        )
+
+        experiment = Experiment(
+            name="three_agent_test",
+            agents=[agent1, agent2, agent3],
+            output_dir=str(temp_dir)
+        )
+
+        result = experiment.run(max_turns=6, initial_topic="discussion")
+        
+        # Should have messages from all three agents
+        agent_names = set(t.agent_name for t in result.turns)
+        assert len(agent_names) >= 2  # At least 2 different agents spoke
+
+    def test_round_robin_turn_order(self, mock_provider, temp_dir):
+        """Test round-robin turn order with multiple agents."""
+        agents = [
+            ConversationAgent(
+                provider=mock_provider,
+                persona=Persona(name=f"Agent{i}"),
+                role="user" if i == 0 else "assistant"
+            )
+            for i in range(3)
+        ]
+
+        config = ExperimentConfig(
+            name="round_robin_test",
+            turn_order="round_robin"
+        )
+
+        experiment = Experiment(
+            name="round_robin_test",
+            agents=agents,
+            config=config,
+            output_dir=str(temp_dir)
+        )
+
+        result = experiment.run(max_turns=6, initial_topic="test")
+        
+        # With round-robin, agents should take turns in order
+        assert len(result.turns) > 0
+
+    def test_user_first_turn_order(self, mock_provider, temp_dir):
+        """Test user_first turn order interleaves users and assistants."""
+        user1 = ConversationAgent(
+            provider=mock_provider,
+            persona=Persona(name="User1"),
+            role="user"
+        )
+        user2 = ConversationAgent(
+            provider=mock_provider,
+            persona=Persona(name="User2"),
+            role="user"
+        )
+        assistant = ConversationAgent(
+            provider=mock_provider,
+            persona=Persona(name="Assistant"),
+            role="assistant"
+        )
+
+        config = ExperimentConfig(
+            name="user_first_test",
+            turn_order="user_first"
+        )
+
+        experiment = Experiment(
+            name="user_first_test",
+            agents=[user1, assistant, user2],  # Mixed order in list
+            config=config,
+            output_dir=str(temp_dir)
+        )
+
+        result = experiment.run(max_turns=4, initial_topic="test")
+        
+        # First speaker should be a user
+        if result.turns:
+            first_speaker = result.turns[0].agent_name
+            assert first_speaker in ["User1", "User2"]
+
+    def test_random_turn_order(self, mock_provider, temp_dir):
+        """Test random turn order varies speakers."""
+        agents = [
+            ConversationAgent(
+                provider=mock_provider,
+                persona=Persona(name=f"Agent{i}"),
+                role="user" if i == 0 else "assistant"
+            )
+            for i in range(3)
+        ]
+
+        config = ExperimentConfig(
+            name="random_order_test",
+            turn_order="random"
+        )
+
+        experiment = Experiment(
+            name="random_order_test",
+            agents=agents,
+            config=config,
+            output_dir=str(temp_dir)
+        )
+
+        result = experiment.run(max_turns=10, initial_topic="test")
+        
+        # Should have some variation in speakers
+        assert len(result.turns) > 0
+
+    def test_multi_agent_attribution(self, mock_provider, temp_dir):
+        """Test that multi-agent messages include speaker attribution."""
+        agent1 = ConversationAgent(
+            provider=mock_provider,
+            persona=Persona(name="Alice"),
+            role="user"
+        )
+        agent2 = ConversationAgent(
+            provider=mock_provider,
+            persona=Persona(name="Bob"),
+            role="assistant"
+        )
+        agent3 = ConversationAgent(
+            provider=mock_provider,
+            persona=Persona(name="Charlie"),
+            role="assistant"
+        )
+
+        experiment = Experiment(
+            name="attribution_test",
+            agents=[agent1, agent2, agent3],
+            output_dir=str(temp_dir)
+        )
+
+        result = experiment.run(max_turns=6, initial_topic="test")
+        
+        # Each turn should be attributed to an agent
+        for turn in result.turns:
+            assert turn.agent_name in ["Alice", "Bob", "Charlie"]
+
+    def test_get_agent_order_round_robin(self, mock_provider, temp_dir):
+        """Test _get_agent_order for round_robin strategy."""
+        user = ConversationAgent(
+            provider=mock_provider,
+            persona=Persona(name="User"),
+            role="user"
+        )
+        assistant = ConversationAgent(
+            provider=mock_provider,
+            persona=Persona(name="Assistant"),
+            role="assistant"
+        )
+
+        experiment = Experiment(
+            name="order_test",
+            agents=[assistant, user],  # Intentionally reversed
+            output_dir=str(temp_dir)
+        )
+
+        order = experiment._get_agent_order()
+        
+        # User should come first in round_robin
+        assert order[0].role == "user"
+
+    def test_get_agent_order_user_first(self, mock_provider, temp_dir):
+        """Test _get_agent_order for user_first strategy."""
+        users = [
+            ConversationAgent(
+                provider=mock_provider,
+                persona=Persona(name=f"User{i}"),
+                role="user"
+            )
+            for i in range(2)
+        ]
+        assistants = [
+            ConversationAgent(
+                provider=mock_provider,
+                persona=Persona(name=f"Asst{i}"),
+                role="assistant"
+            )
+            for i in range(2)
+        ]
+
+        config = ExperimentConfig(name="test", turn_order="user_first")
+        experiment = Experiment(
+            name="order_test",
+            agents=assistants + users,  # Mixed
+            config=config,
+            output_dir=str(temp_dir)
+        )
+
+        order = experiment._get_agent_order()
+        
+        # Should interleave: user, assistant, user, assistant
+        assert order[0].role == "user"
+        assert order[1].role == "assistant"

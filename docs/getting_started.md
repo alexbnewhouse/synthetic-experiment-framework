@@ -134,6 +134,31 @@ metrics = calculate_basic_metrics(results)
 print(f"Average message length: {metrics.avg_message_length:.1f} characters")
 ```
 
+## Using the Command-Line Interface
+
+The framework includes a CLI tool for common operations:
+
+```bash
+# Initialize a new experiment in current directory
+synthetic-exp init
+
+# Run an experiment from config file
+synthetic-exp run config.yaml
+
+# Run with overrides
+synthetic-exp run config.yaml --max-turns 10 --replicates 5
+
+# Validate your configuration
+synthetic-exp validate-config config.yaml
+synthetic-exp validate-persona personas/my_persona.yaml
+
+# Analyze results
+synthetic-exp analyze results/my_experiment/ --export-csv
+
+# List available survey templates
+synthetic-exp list-surveys
+```
+
 ## Running the Political Polarization Example
 
 The framework comes with a complete political polarization experiment:

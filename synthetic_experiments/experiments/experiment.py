@@ -55,6 +55,10 @@ class ExperimentConfig:
         repetition_threshold: Similarity threshold for repetition detection
         save_conversations: Whether to save conversation data
         output_dir: Directory for saving results
+        turn_order: How to order turns in multi-agent conversations
+            - "round_robin": Each agent speaks in order (default)
+            - "user_first": User agents alternate with assistant agents
+            - "random": Random agent selection each turn
     """
     name: str
     max_turns: int = 20
@@ -65,6 +69,7 @@ class ExperimentConfig:
     save_conversations: bool = True
     output_dir: str = "results"
     metadata: Dict[str, Any] = field(default_factory=dict)
+    turn_order: str = "round_robin"  # "round_robin", "user_first", "random"
 
 
 class Experiment:
@@ -199,52 +204,97 @@ class Experiment:
         """
         Execute the conversation between agents.
 
+        Supports multiple agents (>2) with configurable turn order.
+
         Args:
             max_turns: Maximum number of turns
             initial_topic: Initial conversation topic
         """
-        # Determine turn order (user agent goes first)
-        user_agent = next((a for a in self.agents if a.role == "user"), self.agents[0])
-        other_agents = [a for a in self.agents if a != user_agent]
+        import random
 
-        if not other_agents:
-            raise ValueError("Need at least one assistant agent")
-
-        assistant_agent = other_agents[0]
+        # Get ordered list of agents based on turn_order strategy
+        agent_order = self._get_agent_order()
 
         # Start conversation with initial topic
         current_prompt = self._create_initial_prompt(initial_topic)
 
+        # Track which agent spoke last for multi-agent context
+        last_speaker = None
+
         for turn in range(max_turns):
-            # User agent responds
             try:
-                user_message = user_agent.respond(current_prompt)
-                self.current_logger.log_message(user_agent.name, user_message)
+                # Get next agent based on turn order strategy
+                if self.config.turn_order == "random":
+                    # Random selection, but don't repeat same agent twice
+                    available = [a for a in self.agents if a != last_speaker]
+                    current_agent = random.choice(available) if available else self.agents[0]
+                else:
+                    # Round-robin or user_first - cycle through ordered list
+                    current_agent = agent_order[turn % len(agent_order)]
 
-                logger.debug(f"Turn {turn + 1}/{max_turns} - {user_agent.name}: {user_message.content[:100]}...")
+                # Generate response
+                message = current_agent.respond(current_prompt)
+                self.current_logger.log_message(current_agent.name, message)
+
+                logger.debug(
+                    f"Turn {turn + 1}/{max_turns} - {current_agent.name}: "
+                    f"{message.content[:100]}..."
+                )
 
                 # Check for stopping conditions
-                if self._should_stop(user_message.content):
+                if self._should_stop(message.content):
                     logger.info(f"Stopping condition met at turn {turn + 1}")
                     break
 
-                # Assistant agent responds
-                assistant_message = assistant_agent.respond(user_message.content)
-                self.current_logger.log_message(assistant_agent.name, assistant_message)
+                # For multi-agent, format prompt with speaker attribution
+                if len(self.agents) > 2:
+                    current_prompt = f"[{current_agent.name}]: {message.content}"
+                else:
+                    current_prompt = message.content
 
-                logger.debug(f"Turn {turn + 1}/{max_turns} - {assistant_agent.name}: {assistant_message.content[:100]}...")
-
-                # Prepare next prompt (assistant's response becomes the prompt)
-                current_prompt = assistant_message.content
-
-                # Check for stopping conditions
-                if self._should_stop(assistant_message.content):
-                    logger.info(f"Stopping condition met at turn {turn + 1}")
-                    break
+                last_speaker = current_agent
 
             except Exception as e:
                 logger.error(f"Error at turn {turn + 1}: {e}")
                 raise
+
+    def _get_agent_order(self) -> List[ConversationAgent]:
+        """
+        Determine agent ordering based on turn_order strategy.
+
+        Returns:
+            Ordered list of agents for turn-taking
+        """
+        turn_order = self.config.turn_order
+
+        if turn_order == "user_first":
+            # User agents first, then assistant agents, alternating
+            users = [a for a in self.agents if a.role == "user"]
+            assistants = [a for a in self.agents if a.role == "assistant"]
+            others = [a for a in self.agents if a.role not in ("user", "assistant")]
+
+            # Interleave: user, assistant, user, assistant, ...
+            order = []
+            max_len = max(len(users), len(assistants))
+            for i in range(max_len):
+                if i < len(users):
+                    order.append(users[i])
+                if i < len(assistants):
+                    order.append(assistants[i])
+            order.extend(others)
+            return order if order else self.agents
+
+        elif turn_order == "random":
+            # Random is handled per-turn in _run_conversation
+            return self.agents
+
+        else:  # "round_robin" (default)
+            # User agent goes first, then others in order
+            user_agent = next((a for a in self.agents if a.role == "user"), None)
+            if user_agent:
+                others = [a for a in self.agents if a != user_agent]
+                return [user_agent] + others
+            return self.agents
 
     def _create_initial_prompt(self, initial_topic: str) -> str:
         """

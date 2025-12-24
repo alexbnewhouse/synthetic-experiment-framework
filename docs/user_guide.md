@@ -277,6 +277,49 @@ experiment = load_experiment_config("config.yaml")
 results = experiment.run()
 ```
 
+### Multi-Agent Conversations (>2 Participants)
+
+The framework supports conversations with more than two agents. Configure turn order in YAML:
+
+```yaml
+experiment:
+  name: "group_discussion"
+  max_turns: 30
+  turn_order: "round_robin"  # How agents take turns
+
+agents:
+  - name: "liberal_user"
+    role: "user"
+    provider:
+      type: "ollama"
+      model: "llama2"
+    persona:
+      file: "personas/liberal.yaml"
+  
+  - name: "moderator"
+    role: "assistant"
+    provider:
+      type: "ollama"
+      model: "llama2"
+    persona:
+      file: "personas/moderator.yaml"
+  
+  - name: "conservative_user"
+    role: "user"
+    provider:
+      type: "ollama"
+      model: "llama2"
+    persona:
+      file: "personas/conservative.yaml"
+```
+
+**Turn order options:**
+- `round_robin` (default): Agents speak in list order, with user-role agents first
+- `user_first`: Interleaves user and assistant agents (user, assistant, user, assistant...)
+- `random`: Random agent selection each turn (same agent never speaks twice in a row)
+
+Multi-agent messages automatically include speaker attribution for context.
+
 ## Data Collection
 
 The framework automatically collects comprehensive conversation data.
@@ -521,7 +564,7 @@ storage.export_turns_csv("analysis/turns.csv")
 
 ## Testing
 
-The framework includes a comprehensive test suite with 260+ tests covering all modules.
+The framework includes a comprehensive test suite with 315+ tests covering all modules.
 
 ### Running Tests
 

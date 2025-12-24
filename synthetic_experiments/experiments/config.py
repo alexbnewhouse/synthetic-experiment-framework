@@ -84,6 +84,52 @@ def load_yaml_config(config_path: str) -> Dict[str, Any]:
         raise ConfigurationError(f"Invalid YAML: {e}")
 
 
+def validate_config(config: Dict[str, Any]) -> bool:
+    """
+    Validate experiment configuration without creating objects.
+    
+    Args:
+        config: Configuration dictionary to validate
+        
+    Returns:
+        True if valid
+        
+    Raises:
+        ConfigurationError: If configuration is invalid
+    """
+    # Check experiment section
+    if "experiment" not in config:
+        raise ConfigurationError("Configuration must have 'experiment' section")
+    
+    exp_config = config["experiment"]
+    if not exp_config.get("name"):
+        raise ConfigurationError("Experiment must have a 'name'")
+    
+    # Check agents section
+    if "agents" not in config or not config["agents"]:
+        raise ConfigurationError("Configuration must have 'agents' section with at least 2 agents")
+    
+    if len(config["agents"]) < 2:
+        raise ConfigurationError("Experiment requires at least 2 agents")
+    
+    # Validate each agent
+    for i, agent_config in enumerate(config["agents"]):
+        if "provider" not in agent_config:
+            raise ConfigurationError(f"Agent {i+1} must have 'provider' configuration")
+        if "persona" not in agent_config:
+            raise ConfigurationError(f"Agent {i+1} must have 'persona' configuration")
+        
+        provider = agent_config["provider"]
+        if "type" not in provider:
+            raise ConfigurationError(f"Agent {i+1} provider must have 'type'")
+        if provider["type"].lower() not in ["ollama", "claude", "openai"]:
+            raise ConfigurationError(f"Agent {i+1} provider type must be ollama, claude, or openai")
+        if "model" not in provider:
+            raise ConfigurationError(f"Agent {i+1} provider must have 'model'")
+    
+    return True
+
+
 def create_provider_from_config(provider_config: Dict[str, Any]):
     """
     Create an LLM provider from configuration.
@@ -280,7 +326,8 @@ def load_experiment_config(config_path: str) -> Experiment:
         repetition_threshold=exp_config.get("repetition_threshold", 0.9),
         save_conversations=exp_config.get("save_conversations", True),
         output_dir=exp_config.get("output_dir", "results"),
-        metadata=exp_config.get("metadata", {})
+        metadata=exp_config.get("metadata", {}),
+        turn_order=exp_config.get("turn_order", "round_robin")
     )
 
     # Resolve output_dir relative to config file if relative

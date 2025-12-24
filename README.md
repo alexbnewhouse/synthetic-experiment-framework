@@ -58,6 +58,29 @@ print(f"Completed {len(results.turns)} turns")
 print(f"Total tokens: {results.get_total_tokens()}")
 ```
 
+### Using the CLI
+
+```bash
+# Run experiment from config
+synthetic-exp run config.yaml
+
+# Run with options
+synthetic-exp run config.yaml --max-turns 10 --replicates 5
+
+# Initialize a new experiment
+synthetic-exp init
+
+# Validate configuration files
+synthetic-exp validate-config config.yaml
+synthetic-exp validate-persona personas/user.yaml
+
+# Analyze results
+synthetic-exp analyze results/ --export-csv
+
+# List available survey templates
+synthetic-exp list-surveys
+```
+
 ### Run the Political Polarization Example
 
 ```bash
@@ -191,7 +214,34 @@ print(f"Ideological shift: {delta.ideological_delta:+.3f}")
 - Use `survey="bail2018"` to replicate the Bail et al. (2018) PNAS 10-item policy scale (higher = more conservative).
 - Pass a custom survey instance if you need bespoke questions or scoring.
 
-### 6. Experimental Design Support
+### 6. Multi-Agent Conversations (>2 Participants)
+
+Support for group discussions with configurable turn order:
+
+```yaml
+experiment:
+  name: "group_discussion"
+  max_turns: 30
+  turn_order: "round_robin"  # or "user_first" or "random"
+
+agents:
+  - name: "user1"
+    role: "user"
+    # ... config
+  - name: "moderator"
+    role: "assistant"
+    # ...
+  - name: "user2"
+    role: "user"
+    # ...
+```
+
+Turn order options:
+- `round_robin` (default): Agents speak in order, users first
+- `user_first`: Interleaves user and assistant agents
+- `random`: Random agent each turn (no repeats)
+
+### 7. Experimental Design Support
 
 Run factorial designs, multiple replicates, and batch experiments:
 
@@ -210,7 +260,7 @@ results = experiment.run()
 
 ## Testing
 
-The framework includes a comprehensive test suite with 260+ tests covering all modules:
+The framework includes a comprehensive test suite with 315+ tests covering all modules:
 
 ```bash
 # Run all tests

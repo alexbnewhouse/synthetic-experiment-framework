@@ -88,6 +88,31 @@ python run_experiment.py --replicates 5
 python run_experiment.py --full-design
 ```
 
+### Using the CLI Tool
+```bash
+# Run experiment from config
+synthetic-exp run config.yaml
+
+# Run with overrides
+synthetic-exp run config.yaml --max-turns 10 --replicates 5
+
+# Run pre/post survey only
+synthetic-exp survey config.yaml
+
+# Analyze results
+synthetic-exp analyze results/ --format csv
+
+# Initialize new experiment
+synthetic-exp init my_experiment --provider ollama
+
+# Validate configuration files
+synthetic-exp validate-config config.yaml
+synthetic-exp validate-persona personas/user.yaml
+
+# List available survey templates
+synthetic-exp list-surveys
+```
+
 ## Key Design Patterns
 
 ### Provider Pattern
@@ -110,6 +135,7 @@ Experiments can be defined in YAML for reproducibility:
 experiment:
   name: "my_study"
   max_turns: 20
+  turn_order: "round_robin"  # or "user_first" or "random"
 
 agents:
   - role: "user"
@@ -125,6 +151,32 @@ Load and run:
 experiment = load_experiment_config("config.yaml")
 results = experiment.run()
 ```
+
+### Multi-Agent Conversations (>2 Participants)
+The framework supports conversations with more than two agents. Configure turn order:
+
+```yaml
+experiment:
+  name: "group_discussion"
+  max_turns: 30
+  turn_order: "round_robin"  # Each agent speaks in order
+
+agents:
+  - name: "user1"
+    role: "user"
+    # ... provider and persona config
+  - name: "moderator"
+    role: "assistant"
+    # ...
+  - name: "user2"
+    role: "user"
+    # ...
+```
+
+Turn order options:
+- `round_robin` (default): Agents speak in list order, with user-role agents first
+- `user_first`: Interleaves user and assistant agents (user, assistant, user, assistant...)
+- `random`: Random agent selection each turn (never same agent twice in a row)
 
 ### Data Flow
 ```
@@ -333,18 +385,18 @@ tests/
 
 ## Future Enhancements (Not Yet Implemented)
 
-- CLI tool (`synthetic-exp` command)
-- API reference documentation
+- API reference documentation (auto-generated Sphinx/mkdocs)
 - Streaming conversation support
 - Real-time metrics dashboard
 - More sophisticated stopping conditions
-- Multi-agent (>2 participants) support
 - Conversation continuation/interruption
 
 ## Implemented Features
 
 - ✅ Unit tests (pytest) - 260+ tests with ~79% coverage
 - ✅ Pre/post survey system for measuring polarization treatment effects
+- ✅ CLI tool (`synthetic-exp` command) with run, survey, analyze, init, validate commands
+- ✅ Multi-agent (>2 participants) support with configurable turn order (round_robin, user_first, random)
 
 ## Critical Files to Understand
 
